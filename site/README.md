@@ -12,9 +12,9 @@ python3 -m http.server 8000
 
 ## Deploy
 
-Any static host works. Upload this folder as is.
+`.github/workflows/site.yml` publishes this folder to GitHub Pages on every push to main that touches `site/`, at https://snowztech.github.io/holt/. Run it by hand from the Actions tab too.
 
-For GitHub Pages from this repo: Settings → Pages → Source: GitHub Actions, then add a workflow that uploads `site/` with `actions/upload-pages-artifact`. Add a `CNAME` file here once there's a domain.
+For a custom domain, add a `CNAME` file here with the domain, point the domain's DNS at GitHub Pages, and update the `og:` URLs in `index.html`.
 
 ## Notes
 
