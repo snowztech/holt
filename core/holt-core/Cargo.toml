@@ -16,6 +16,10 @@ path = "src/bin/uniffi-bindgen.rs"
 blake3 = "1.8"
 iroh = "1.4"
 iroh-mdns-address-lookup = "0.6"
+# libc 0.2.190 made the net/route.h constants and in6_ifreq macOS-only, and iroh's
+# netwatch and netdev use them on iOS too, so newer versions don't build for iPhone.
+# Lift this once those crates handle it.
+libc = "=0.2.189"
 n0-future = "0.3"
 rand = "0.10"
 rusqlite = { version = "0.41", features = ["bundled"] }

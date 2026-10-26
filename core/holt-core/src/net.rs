@@ -213,12 +213,13 @@ impl Node {
                 online: Mutex::new(HashMap::new()),
                 dialers: Mutex::new(HashMap::new()),
             });
+            // Best effort: on an iPhone without the multicast entitlement, mDNS can't
+            // start. Pairing by QR code and syncing still work without it.
             if !local_only {
-                let mdns = MdnsAddressLookup::builder()
-                    .build(endpoint.id())
-                    .map_err(|e| net(e.into()))?;
-                lookup.add(mdns.clone());
-                tokio::spawn(watch_nearby(inner.clone(), mdns));
+                if let Ok(mdns) = MdnsAddressLookup::builder().build(endpoint.id()) {
+                    lookup.add(mdns.clone());
+                    tokio::spawn(watch_nearby(inner.clone(), mdns));
+                }
             }
             let router = Router::builder(endpoint)
                 .accept(SYNC_ALPN, SyncHandler(inner.clone()))

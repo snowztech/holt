@@ -5,3 +5,4 @@ apple/.swiftpm/
 apple/HoltCoreFFI.xcframework/
 apple/Sources/HoltCore/holt_core.swift
 .DS_Store
+apple/ios/Holt.xcodeproj/

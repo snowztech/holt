@@ -5,18 +5,31 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 # Ad-hoc signing ("-") works too, but macOS forgets the grant on every build.
 SIGN_ID ?= $(shell security find-identity -p codesigning -v | grep -m1 "Apple Development" | sed -E 's/.*"(.*)"/\1/')
 
-.PHONY: core mac icon run test lint fmt dist clean
+.PHONY: core core-ios bindings mac ios icon run test lint fmt dist clean
 
+# The Mac slice only, so Mac work stays fast. `make core-ios` adds iPhone and Simulator.
 core:
 	cd core && cargo build --release
+	$(MAKE) bindings XCFRAMEWORK_LIBS="-library core/target/release/libholt_core.a -headers build/headers"
+
+core-ios:
+	cd core && cargo build --release
+	cd core && IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --release --lib --target aarch64-apple-ios
+	cd core && IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --release --lib --target aarch64-apple-ios-sim
+	$(MAKE) bindings XCFRAMEWORK_LIBS="\
+		-library core/target/release/libholt_core.a -headers build/headers \
+		-library core/target/aarch64-apple-ios/release/libholt_core.a -headers build/headers \
+		-library core/target/aarch64-apple-ios-sim/release/libholt_core.a -headers build/headers"
+
+# Generates the Swift bindings and packages the core as apple/HoltCoreFFI.xcframework.
+bindings:
 	rm -rf build/gen build/headers apple/HoltCoreFFI.xcframework
 	cd core && cargo run -q --release --bin uniffi-bindgen -- generate \
 		--library target/release/libholt_core.dylib --language swift --out-dir ../build/gen
 	mkdir -p build/headers apple/Sources/HoltCore
 	cp build/gen/holt_coreFFI.h build/headers/
 	cp build/gen/holt_coreFFI.modulemap build/headers/module.modulemap
-	xcodebuild -create-xcframework -library core/target/release/libholt_core.a \
-		-headers build/headers -output apple/HoltCoreFFI.xcframework
+	xcodebuild -create-xcframework $(XCFRAMEWORK_LIBS) -output apple/HoltCoreFFI.xcframework
 	cp build/gen/holt_core.swift apple/Sources/HoltCore/
 
 mac: core
@@ -45,6 +58,12 @@ icon:
 	done
 	iconutil -c icns build/AppIcon.iconset -o apple/AppIcon.icns
 
+# The iPhone app in the Simulator. Open apple/ios/Holt.xcodeproj in Xcode to run it on a phone.
+ios: core-ios
+	cd apple/ios && xcodegen generate --quiet
+	xcodebuild -project apple/ios/Holt.xcodeproj -scheme Holt -destination 'generic/platform=iOS Simulator' \
+		-derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO -quiet build
+
 run: mac
 	-pkill -x Holt
 	open $(APP)
@@ -52,7 +71,7 @@ run: mac
 test:
 	cd core && cargo test
 
-SWIFT_SOURCES := apple/Sources/Holt apple/Package.swift
+SWIFT_SOURCES := apple/Sources/Holt apple/ios/Sources apple/Package.swift
 
 lint:
 	cd core && cargo fmt --check && cargo clippy --all-targets -- -D warnings

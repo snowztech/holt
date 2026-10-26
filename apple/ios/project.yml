@@ -1,0 +1,40 @@
+# The iPhone app. `make ios` generates Holt.xcodeproj from this file, so the
+# project itself is never committed and never conflicts.
+name: Holt
+options:
+  bundleIdPrefix: app.holtclip
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: X935Q2B2RF
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Holt:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      # The generated bindings, compiled into the app instead of a separate module.
+      - path: ../Sources/HoltCore
+    dependencies:
+      - framework: ../HoltCoreFFI.xcframework
+        embed: false
+      - sdk: SystemConfiguration.framework
+      - sdk: Security.framework
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Holt
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocalNetworkUsageDescription: Holt connects directly to your Macs on this network to sync clips.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.holtclip.Holt
+        TARGETED_DEVICE_FAMILY: "1"
+        # The core is built for Apple Silicon only, like the Mac release.
+        EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
