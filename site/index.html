@@ -32,24 +32,6 @@
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <mask id="mark-cut" maskUnits="userSpaceOnUse" x="-1" y="0" width="20" height="18">
-        <rect x="-1" width="20" height="18" fill="#fff" />
-        <ellipse cx="7.35" cy="12.7" rx="2.45" ry="2.15" fill="#000" />
-        <ellipse cx="10.65" cy="12.7" rx="2.45" ry="2.15" fill="#000" />
-        <ellipse cx="5.9" cy="9.1" rx="1" ry="1.15" fill="#000" />
-        <ellipse cx="12.1" cy="9.1" rx="1" ry="1.15" fill="#000" />
-      </mask>
-      <symbol id="mark" viewBox="-1 0 20 18">
-        <g fill="currentColor">
-          <g mask="url(#mark-cut)">
-            <circle cx="3.2" cy="7.4" r="1.7" />
-            <circle cx="14.8" cy="7.4" r="1.7" />
-            <ellipse cx="9" cy="10.4" rx="7.6" ry="5.6" />
-          </g>
-          <ellipse cx="9" cy="11.3" rx="1.45" ry="0.95" />
-        </g>
-        <path d="M1.9 12.3L-.2 11.6M1.9 13.6L-.2 14M16.1 12.3L18.2 11.6M16.1 13.6L18.2 14" stroke="currentColor" stroke-width=".75" stroke-linecap="round" fill="none" />
-      </symbol>
       <!-- Skip's face alone is the logo. The full Skip holds a pebble. -->
       <symbol id="skip-face" viewBox="18 46 164 126">
         <circle cx="35" cy="86" r="14" fill="#7A5236" />
@@ -134,7 +116,7 @@
         </div>
         <div class="popup" aria-hidden="true">
           <div class="popup-search">
-            <svg class="popup-mark"><use href="#mark" /></svg>
+            <svg class="popup-mark"><use href="#skip-face" /></svg>
             <span class="popup-query"><span id="demo-query"></span><i class="caret"></i><span class="placeholder" id="demo-placeholder">Search your clips</span></span>
           </div>
           <div class="popup-body">

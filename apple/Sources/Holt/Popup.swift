@@ -175,10 +175,8 @@ struct PopupView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                // Quiet on purpose, like Raycast's: the clips are what this panel is about.
-                MarkView()
-                    .frame(width: 20, height: 20)
-                    .foregroundStyle(.tertiary)
+                Skip(faceOnly: true)
+                    .frame(width: 28, height: 22)
                 TextField("Search your clips", text: $model.query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 20))
