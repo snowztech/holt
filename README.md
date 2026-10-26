@@ -19,7 +19,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="site/assets/popup-light.png">
-    <img src="site/assets/popup-dark.png" width="540" alt="Holt's popup: a search field, recent clips with the app and Mac they came from, a preview of the selected link, and a notice that a clip arrived from a MacBook Pro">
+    <img src="site/assets/popup-dark.png" width="760" alt="Holt's popup: a search field, recent clips with the app and Mac they came from, a preview of the selected link, and a notice that a clip arrived from a MacBook Pro">
   </picture>
 </p>
 
