@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.1.1 to publish a signed, notarized DMG on GitHub Releases.
+# Push a tag like v0.1.1 to publish a signed, notarized DMG and update zip on GitHub Releases.
 # The signing and notarization secrets are snowztech organization secrets.
 on:
   push:
@@ -55,6 +55,17 @@ jobs:
           NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8" VERSION="${GITHUB_REF_NAME#v}" ./scripts/dist.sh
           rm "$RUNNER_TEMP/notary.p8"
 
+      # The feed installed copies read at releases/latest/download/appcast.xml, with the zip signed so they can trust it.
+      - name: Sign the update
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          [ -n "$SPARKLE_PRIVATE_KEY" ] || { echo "The SPARKLE_PRIVATE_KEY secret is missing. Export it with Sparkle's generate_keys --account holt -x." >&2; exit 1; }
+          version="${GITHUB_REF_NAME#v}"
+          (umask 077 && echo "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key")
+          SPARKLE_KEY_FILE="$RUNNER_TEMP/sparkle.key" ./scripts/appcast.sh "$version" build/Holt-"$version".zip > build/appcast.xml
+          rm "$RUNNER_TEMP/sparkle.key"
+
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,9 +74,10 @@ jobs:
           ./scripts/release-notes.sh "$version" > "$RUNNER_TEMP/notes.md"
           # Tags like v0.2.0-beta become pre-releases.
           prerelease=$([[ "$version" == *-* ]] && echo "--prerelease" || true)
-          # A fixed name keeps releases/latest/download/Holt.dmg working as a direct link.
+          # Fixed names keep releases/latest/download/Holt.dmg working as a direct link.
           cp build/Holt-"$version".dmg build/Holt.dmg
-          gh release create "$GITHUB_REF_NAME" build/Holt.dmg \
+          cp build/Holt-"$version".zip build/Holt.zip
+          gh release create "$GITHUB_REF_NAME" build/Holt.dmg build/Holt.zip build/appcast.xml \
             --title "Holt $version" --notes-file "$RUNNER_TEMP/notes.md" $prerelease
 
   # A job of its own, so a failed bump can be re-run without publishing the release again.

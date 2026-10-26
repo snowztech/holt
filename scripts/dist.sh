@@ -17,11 +17,27 @@ if [ -n "${VERSION:-}" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $VERSION" "$app/Contents/Info.plist"
 fi
 version=$(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString)
+
+# Only these builds update themselves. A `make run` build has no feed, so it never
+# offers to replace itself with the latest release.
+/usr/libexec/PlistBuddy \
+    -c "Add :SUFeedURL string https://github.com/snowztech/holt/releases/latest/download/appcast.xml" \
+    -c "Add :SUPublicEDKey string kgq6lf9jvmq+Pvnoq6SiyXP06xUrnEUZiFiLDYtXCKY=" \
+    -c "Add :SUEnableAutomaticChecks bool true" \
+    "$app/Contents/Info.plist"
 dmg="$root/build/Holt-$version.dmg"
 zip="$root/build/Holt-$version.zip"
 
 # Hardened runtime and a secure timestamp are what notarization requires.
-codesign --force --timestamp --options runtime --sign "$identity" "$app"
+# Inside out: Sparkle's own programs first, then the framework, then the app.
+sign() {
+    codesign --force --timestamp --options runtime --sign "$identity" "$1"
+}
+sparkle="$app/Contents/Frameworks/Sparkle.framework"
+sign "$sparkle/Versions/B/Autoupdate"
+sign "$sparkle/Versions/B/Updater.app"
+sign "$sparkle"
+sign "$app"
 codesign --verify --strict --deep "$app"
 echo "signed with $identity"
 
@@ -51,12 +67,14 @@ if [ "${NOTARIZE:-1}" = "0" ]; then
     exit 0
 fi
 
-# The app first, so its ticket is stapled before it goes into the disk image.
+# The app first, so its ticket is stapled before it goes into the zip and the disk image.
+# The zip is what Sparkle downloads to update.
 rm -f "$zip"
 ditto -c -k --keepParent "$app" "$zip"
 notarize "$zip"
 xcrun stapler staple "$app"
 rm -f "$zip"
+ditto -c -k --keepParent "$app" "$zip"
 
 make_dmg
 notarize "$dmg"
@@ -64,4 +82,4 @@ xcrun stapler staple "$dmg"
 
 spctl --assess --type execute --verbose "$app"
 spctl --assess --type open --context context:primary-signature --verbose "$dmg"
-echo "built $dmg (signed and notarized)"
+echo "built $zip and $dmg (signed and notarized)"

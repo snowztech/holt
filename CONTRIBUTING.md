@@ -42,6 +42,7 @@ In the app:
 | `Clipboard.swift` | Clipboard watcher, global shortcut, paste keystroke |
 | `Brand.swift` | Colors, the otter mark, Skip, the app icon |
 | `Prefs.swift` | Settings storage and permission checks |
+| `Updates.swift` | Sparkle auto-updates. Only builds from `make dist` have the update feed, so `make run` builds never update themselves |
 
 ## Working on the UI
 

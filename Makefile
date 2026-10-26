@@ -24,6 +24,11 @@ mac: core
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS
 	cp apple/.build/release/Holt $(APP)/Contents/MacOS/
+	# Sparkle installs updates. Its XPC services are only for sandboxed apps, which Holt isn't.
+	mkdir -p $(APP)/Contents/Frameworks
+	ditto apple/.build/release/Sparkle.framework $(APP)/Contents/Frameworks/Sparkle.framework
+	rm -rf $(APP)/Contents/Frameworks/Sparkle.framework/XPCServices $(APP)/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices
+	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/MacOS/Holt
 	cp apple/Info.plist $(APP)/Contents/
 	mkdir -p $(APP)/Contents/Resources
 	cp apple/AppIcon.icns $(APP)/Contents/Resources/

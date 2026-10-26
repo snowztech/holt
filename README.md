@@ -50,7 +50,7 @@
 brew install --cask snowztech/tap/holt
 ```
 
-It needs macOS 14 or later on Apple Silicon. Releases are signed and notarized, so macOS opens Holt without warnings.
+It needs macOS 14 or later on Apple Silicon. Releases are signed and notarized, so macOS opens Holt without warnings, and Holt updates itself from the menu bar menu.
 
 To build from source instead, you need Xcode and Rust ([rustup.rs](https://rustup.rs)):
 

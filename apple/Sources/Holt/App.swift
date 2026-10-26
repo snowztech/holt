@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settings: SettingsWindow!
     private var welcome: WelcomeWindow?
     private let toast = ArrivalToast()
+    private let updates = Updates()
     private var pruneTimer: Timer?
     private var askedForAccessibility = false
 
@@ -110,6 +111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
+        if let version = updates.available {
+            let item = NSMenuItem(title: "Update to Holt \(version)…", action: #selector(checkForUpdates), keyEquivalent: "")
+            item.image = symbol("arrow.down.circle.fill")
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
+
         if let sync = syncStatus() {
             let item = NSMenuItem(title: sync.label, action: sync.connected ? nil : #selector(openDevices), keyEquivalent: "")
             item.image = dot(sync.connected ? .systemGreen : .tertiaryLabelColor)
@@ -139,6 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.image = symbol("gearshape")
         menu.addItem(settingsItem)
+        if updates.canCheck, updates.available == nil {
+            let check = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+            check.image = symbol("arrow.down.circle")
+            menu.addItem(check)
+        }
         if !Permissions.clipboard {
             let warning = NSMenuItem(title: "Allow Clipboard Access…", action: #selector(showWelcome), keyEquivalent: "")
             warning.image = symbol("exclamationmark.triangle")
@@ -158,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openSettings() { settings.show() }
     @objc private func openDevices() { settings.show(.devices) }
     @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func checkForUpdates() { updates.check() }
 
     @objc private func showWelcome() {
         if welcome == nil {
