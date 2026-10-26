@@ -31,33 +31,42 @@ extension Color {
     }
 }
 
-/// Holt's mark: a cairn of three pebbles, the clips you kept. Drawn on an 18×18
-/// grid with y going up, so it maps straight onto a menu bar template image.
-enum Cairn {
-    struct Stone {
-        let rect: CGRect
-        /// Tilt in degrees, counterclockwise.
-        let tilt: CGFloat
+/// Holt's mark: Skip's face, simple enough for the menu bar. Small ears low on a
+/// wide, flat head, a two-lobed muzzle and whiskers make it an otter, not a bear.
+/// Drawn on an 18×18 grid with y going down.
+enum Mark {
+    /// Filled: the ears and the head.
+    static let silhouette = [oval(3.2, 7.4, 1.7, 1.7), oval(14.8, 7.4, 1.7, 1.7), oval(9, 10.4, 7.6, 5.6)]
+    /// Cut out of the silhouette: the muzzle and the eyes.
+    static let cutouts = [oval(7.35, 12.7, 2.45, 2.15), oval(10.65, 12.7, 2.45, 2.15), oval(5.9, 9.1, 1, 1.15), oval(12.1, 9.1, 1, 1.15)]
+    static let nose = oval(9, 11.3, 1.45, 0.95)
+    static let whiskers = [
+        (CGPoint(x: 1.9, y: 12.3), CGPoint(x: -0.2, y: 11.6)),
+        (CGPoint(x: 1.9, y: 13.6), CGPoint(x: -0.2, y: 14.0)),
+        (CGPoint(x: 16.1, y: 12.3), CGPoint(x: 18.2, y: 11.6)),
+        (CGPoint(x: 16.1, y: 13.6), CGPoint(x: 18.2, y: 14.0)),
+    ]
+    static let whiskerWidth: CGFloat = 0.75
+
+    private static func oval(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> CGRect {
+        CGRect(x: cx - rx, y: cy - ry, width: rx * 2, height: ry * 2)
     }
 
-    static let stones = [
-        Stone(rect: CGRect(x: 1.5, y: 1.2, width: 15, height: 5.2), tilt: 0),
-        Stone(rect: CGRect(x: 3.8, y: 7.3, width: 10.4, height: 4.5), tilt: -4),
-        Stone(rect: CGRect(x: 6.4, y: 12.6, width: 6.2, height: 4), tilt: 6),
-    ]
-
     static func menuBarImage() -> NSImage {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            NSColor.black.setFill()
-            for stone in stones {
-                let path = NSBezierPath(
-                    ovalIn: CGRect(
-                        x: -stone.rect.width / 2, y: -stone.rect.height / 2,
-                        width: stone.rect.width, height: stone.rect.height))
-                var transform = AffineTransform(translationByX: stone.rect.midX, byY: stone.rect.midY)
-                transform.rotate(byDegrees: stone.tilt)
-                path.transform(using: transform)
-                path.fill()
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
+            NSColor.black.set()
+            silhouette.forEach { NSBezierPath(ovalIn: $0).fill() }
+            NSGraphicsContext.current?.compositingOperation = .destinationOut
+            cutouts.forEach { NSBezierPath(ovalIn: $0).fill() }
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSBezierPath(ovalIn: nose).fill()
+            for (from, to) in whiskers {
+                let path = NSBezierPath()
+                path.move(to: from)
+                path.line(to: to)
+                path.lineWidth = whiskerWidth
+                path.lineCapStyle = .round
+                path.stroke()
             }
             return true
         }
@@ -67,30 +76,28 @@ enum Cairn {
     }
 }
 
-/// The cairn as a view. `lift` raises the top stone, so animating it to 0 drops
-/// a new pebble onto the stack.
-struct CairnMark: View, Animatable {
-    var lift: Double = 0
-
-    var animatableData: Double {
-        get { lift }
-        set { lift = newValue }
-    }
-
+/// The mark as a view, in the current foreground style.
+struct MarkView: View {
     var body: some View {
         Canvas { ctx, size in
             let scale = min(size.width, size.height) / 18
-            for (index, stone) in Cairn.stones.enumerated() {
-                var c = ctx
-                let raise = index == Cairn.stones.count - 1 ? lift : 0
-                // Flip to SwiftUI's y-down space.
-                c.translateBy(x: stone.rect.midX * scale, y: (18 - stone.rect.midY - raise) * scale)
-                c.rotate(by: .degrees(-stone.tilt))
-                let w = stone.rect.width * scale, h = stone.rect.height * scale
-                c.fill(Path(ellipseIn: CGRect(x: -w / 2, y: -h / 2, width: w, height: h)), with: .foreground)
+            ctx.translateBy(x: (size.width - 18 * scale) / 2, y: (size.height - 18 * scale) / 2)
+            ctx.scaleBy(x: scale, y: scale)
+            Mark.silhouette.forEach { ctx.fill(Path(ellipseIn: $0), with: .foreground) }
+            var cut = ctx
+            cut.blendMode = .destinationOut
+            Mark.cutouts.forEach { cut.fill(Path(ellipseIn: $0), with: .color(.black)) }
+            ctx.fill(Path(ellipseIn: Mark.nose), with: .foreground)
+            var whiskers = Path()
+            for (from, to) in Mark.whiskers {
+                whiskers.move(to: from)
+                whiskers.addLine(to: to)
             }
+            ctx.stroke(whiskers, with: .foreground, style: StrokeStyle(lineWidth: Mark.whiskerWidth, lineCap: .round))
         }
         .aspectRatio(1, contentMode: .fit)
+        // Keeps the cutouts from punching through to whatever is behind the mark.
+        .compositingGroup()
     }
 }
 

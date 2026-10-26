@@ -58,9 +58,11 @@ private struct ToastView: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            CairnMark(lift: landed ? 0 : 7)
+            MarkView()
                 .frame(width: 22, height: 22)
                 .foregroundStyle(Brand.river)
+                .offset(y: landed ? 0 : -6)
+                .opacity(landed ? 1 : 0)
             VStack(alignment: .leading, spacing: 1) {
                 Text("From \(copy.device)").font(.system(size: 12.5, weight: .semibold))
                 Text(oneLine(copy.text))
@@ -78,7 +80,7 @@ private struct ToastView: View {
         .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
         .padding(12)
         .onAppear {
-            // The new clip drops onto the stack.
+            // Skip hops in with the clip.
             if reduceMotion {
                 landed = true
             } else {

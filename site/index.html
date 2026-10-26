@@ -32,10 +32,23 @@
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <symbol id="cairn" viewBox="0 0 18 18">
-        <ellipse cx="9" cy="14.2" rx="7.5" ry="2.6" />
-        <ellipse cx="9" cy="8.45" rx="5.2" ry="2.25" transform="rotate(4 9 8.45)" />
-        <ellipse class="cairn-top" cx="9.5" cy="3.4" rx="3.1" ry="2" transform="rotate(-6 9.5 3.4)" />
+      <mask id="mark-cut" maskUnits="userSpaceOnUse" x="-1" y="0" width="20" height="18">
+        <rect x="-1" width="20" height="18" fill="#fff" />
+        <ellipse cx="7.35" cy="12.7" rx="2.45" ry="2.15" fill="#000" />
+        <ellipse cx="10.65" cy="12.7" rx="2.45" ry="2.15" fill="#000" />
+        <ellipse cx="5.9" cy="9.1" rx="1" ry="1.15" fill="#000" />
+        <ellipse cx="12.1" cy="9.1" rx="1" ry="1.15" fill="#000" />
+      </mask>
+      <symbol id="mark" viewBox="-1 0 20 18">
+        <g fill="currentColor">
+          <g mask="url(#mark-cut)">
+            <circle cx="3.2" cy="7.4" r="1.7" />
+            <circle cx="14.8" cy="7.4" r="1.7" />
+            <ellipse cx="9" cy="10.4" rx="7.6" ry="5.6" />
+          </g>
+          <ellipse cx="9" cy="11.3" rx="1.45" ry="0.95" />
+        </g>
+        <path d="M1.9 12.3L-.2 11.6M1.9 13.6L-.2 14M16.1 12.3L18.2 11.6M16.1 13.6L18.2 14" stroke="currentColor" stroke-width=".75" stroke-linecap="round" fill="none" />
       </symbol>
       <symbol id="skip" viewBox="0 0 200 200">
         <circle cx="46" cy="60" r="16" fill="#7A5236" />
@@ -61,7 +74,7 @@
 
   <header class="nav wrap">
     <a class="brand" href="#" aria-label="Holt home">
-      <svg class="brand-mark"><use href="#cairn" /></svg>
+      <svg class="brand-mark"><use href="#mark" /></svg>
       <span class="brand-name">holt</span>
     </a>
     <nav class="nav-links" aria-label="Sections">
@@ -93,7 +106,7 @@
 
       <div class="stage" aria-label="Holt's popup showing recent clips, with a notice that a clip arrived from another Mac">
         <div class="toast" aria-hidden="true">
-          <svg class="toast-mark"><use href="#cairn" /></svg>
+          <svg class="toast-mark"><use href="#mark" /></svg>
           <div>
             <strong>From MacBook Pro</strong>
             <span>github.com/snowztech/holt</span>
@@ -101,7 +114,7 @@
         </div>
         <div class="popup" aria-hidden="true">
           <div class="popup-search">
-            <svg class="popup-mark"><use href="#cairn" /></svg>
+            <svg class="popup-mark"><use href="#mark" /></svg>
             <span class="popup-query"><span id="demo-query"></span><i class="caret"></i><span class="placeholder" id="demo-placeholder">Search your clips</span></span>
           </div>
           <div class="popup-body">
@@ -214,13 +227,13 @@
     </section>
 
     <section class="wrap section skip">
-      <svg class="skip-art" role="img" aria-label="Skip the otter holding a pebble"><use href="#skip" /></svg>
+      <svg class="skip-art" role="img" aria-label="Skip the otter, holding a pebble"><use href="#skip" /></svg>
       <div>
         <span class="sn-meta">Meet Skip</span>
         <h2>Why an otter?</h2>
         <p>
-          A holt is an otter's den. Sea otters keep a favorite stone tucked under their arm and carry it everywhere.
-          Skip does the same with what you copy: each clip is a pebble, your history is the cairn, and syncing is skipping a stone across to your other Mac.
+          A holt is an otter's den, where it keeps what matters. Sea otters even carry a favorite stone tucked under their arm, everywhere they go.
+          Skip does the same with what you copy: keeps it safe, and when you pair your Macs, skips it across to the other one.
         </p>
       </div>
     </section>
@@ -294,7 +307,7 @@
 
   <footer class="wrap footer">
     <a class="brand" href="#">
-      <svg class="brand-mark"><use href="#cairn" /></svg>
+      <svg class="brand-mark"><use href="#mark" /></svg>
       <span class="brand-name">holt</span>
     </a>
     <span>MIT licensed · made by <a href="https://github.com/snowztech" target="_blank" rel="noopener">snowztech</a></span>

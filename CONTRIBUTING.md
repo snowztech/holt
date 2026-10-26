@@ -40,7 +40,7 @@ In the app:
 | `Welcome.swift` | First-launch checklist |
 | `Toast.swift` | The notice when a clip arrives from another Mac |
 | `Clipboard.swift` | Clipboard watcher, global shortcut, paste keystroke |
-| `Brand.swift` | Colors, the cairn mark, Skip, the app icon |
+| `Brand.swift` | Colors, the otter mark, Skip, the app icon |
 | `Prefs.swift` | Settings storage and permission checks |
 
 ## Working on the UI
@@ -79,5 +79,5 @@ CI runs lint, tests and a full app build on every pull request.
 ## Design notes
 
 - Holt should feel like part of macOS: system font, native controls, river teal as the one accent color.
-- The mark is the cairn (three stacked pebbles). Skip the otter shows up for bigger moments: onboarding, empty states, the app icon.
+- Skip the otter is the identity. The small mark is Skip's face (menu bar, search field, the site). The full Skip shows up for bigger moments: onboarding, empty states, the app icon.
 - Write copy for people, not engineers: "Paste for you", not "Accessibility permission".

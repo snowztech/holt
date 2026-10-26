@@ -175,7 +175,7 @@ struct PopupView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                CairnMark()
+                MarkView()
                     .frame(width: 20, height: 20)
                     .foregroundStyle(Brand.river)
                 TextField("Search your clips", text: $model.query)

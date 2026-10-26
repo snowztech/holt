@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = Cairn.menuBarImage()
+        statusItem.button?.image = Mark.menuBarImage()
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
