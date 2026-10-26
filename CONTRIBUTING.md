@@ -25,6 +25,7 @@ core/holt-core/        Rust
 apple/                 Swift package for the Mac app
   Sources/HoltCore/    Generated Swift bindings (from `make core`, not committed)
   Sources/Holt/        The app
+raycast/               Raycast extension. Reads the history database read-only
 ```
 
 The core is plain Rust with [UniFFI](https://mozilla.github.io/uniffi-rs/) annotations. `make core` builds it as a static library, generates `holt_core.swift`, and packages both as `apple/HoltCoreFFI.xcframework`. The Swift app only talks to `Store` and `Node`.
