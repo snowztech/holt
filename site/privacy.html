@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy, Holt</title>
+  <meta name="description" content="Holt collects no data. No account, no Holt server, no analytics. How Holt handles what you copy on your Mac and iPhone." />
+  <meta property="og:title" content="Holt" />
+  <meta property="og:description" content="Your clipboard, kept. Clipboard history for macOS, synced between your Macs. Free and open source." />
+  <meta property="og:image" content="https://holt.snowztech.com/assets/og.png" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="640" />
+  <meta property="og:image:alt" content="Holt: your clipboard, kept. Clipboard history for macOS, synced between your Macs." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://holt.snowztech.com/assets/og.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://holt.snowztech.com/privacy" />
+  <meta name="theme-color" content="#0b1110" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <script>
+    // Before paint, so there's no flash: saved choice, else the system's.
+    try {
+      var t = localStorage.getItem("theme");
+      if (t === "light" || (!t && matchMedia("(prefers-color-scheme: light)").matches)) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@snowztech/ui-css@0.3.0/dist/snowztech-ui.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@snowztech/ui-js@0.2.0/dist/snowztech-ui.esm.js"></script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <!-- Skip's face alone is the logo. The full Skip holds a pebble. -->
+      <symbol id="skip-face" viewBox="18 46 164 126">
+        <circle cx="35" cy="86" r="14" fill="#7A5236" />
+        <circle cx="165" cy="86" r="14" fill="#7A5236" />
+        <circle cx="35" cy="86" r="6" fill="#563824" />
+        <circle cx="165" cy="86" r="6" fill="#563824" />
+        <ellipse cx="100" cy="110" rx="78" ry="58" fill="#7A5236" />
+        <ellipse cx="100" cy="132" rx="40" ry="22" fill="#EAD6C0" />
+        <circle cx="82" cy="137" r="23" fill="#EAD6C0" />
+        <circle cx="118" cy="137" r="23" fill="#EAD6C0" />
+        <ellipse cx="70" cy="101" rx="8.5" ry="9.5" fill="#1D1512" />
+        <ellipse cx="130" cy="101" rx="8.5" ry="9.5" fill="#1D1512" />
+        <circle cx="73" cy="97.5" r="2.8" fill="#fff" />
+        <circle cx="133" cy="97.5" r="2.8" fill="#fff" />
+        <path d="M87 117 Q100 108 113 117 Q113 126 100 128 Q87 126 87 117Z" fill="#1D1512" />
+        <path d="M100 128 V134 M100 134 Q92 142 85 137 M100 134 Q108 142 115 137" fill="none" stroke="#1D1512" stroke-width="3" stroke-linecap="round" />
+        <path d="M60 131 L26 124 M60 139 L25 141 M140 131 L174 124 M140 139 L175 141" fill="none" stroke="#563824" stroke-width="2.4" stroke-linecap="round" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <header class="nav wrap">
+    <a class="brand" href="./" aria-label="Holt home">
+      <svg class="brand-mark" aria-hidden="true"><use href="#skip-face" /></svg>
+      <span class="brand-name">Holt</span>
+    </a>
+    <nav class="nav-links" aria-label="Pages">
+      <a href="./">Home</a>
+      <a href="https://github.com/snowztech/holt" target="_blank" rel="noopener">GitHub</a>
+      <button class="sn-theme-toggle" data-sn-theme-toggle aria-label="Switch light and dark">
+        <span class="sn-theme-toggle__indicator"></span>
+      </button>
+    </nav>
+  </header>
+
+  <main class="wrap legal">
+    <h1>Privacy</h1>
+    <p class="legal-lede">Holt collects no data. There's no Holt account and no Holt server.</p>
+    <p class="legal-date">Last updated October 26, 2026. This covers Holt for Mac and Holt for iPhone.</p>
+
+    <h2>What you copy</h2>
+    <p>Your clips stay on your devices, in a database only Holt reads. Holt for Mac never records copies that password managers mark as private, and skips any app you tell it to ignore.</p>
+
+    <h2>Sync</h2>
+    <p>When you pair devices, they connect to each other and sync clips end-to-end encrypted. Only devices you pair can connect, and pairing needs the code shown on your own screen.</p>
+    <p>To find each other across networks, your devices publish their network address, under a random device id, to a discovery service run by <a href="https://n0.computer" target="_blank" rel="noopener">n0</a>, the makers of the open source iroh networking library. When two devices can't reach each other directly, n0's relay servers pass the encrypted traffic along. Neither service can read your clips, and neither knows who you are.</p>
+
+    <h2>No tracking</h2>
+    <p>Holt has no analytics, no ads, no crash reporting service and no tracking of any kind.</p>
+
+    <h2>Permissions</h2>
+    <p>On the Mac, Holt reads the clipboard to keep your history, and can paste for you if you allow it. On the iPhone, Holt uses the camera only to scan the pairing code, and the local network only to find and reach your Macs. It reads the clipboard only when you tap Paste or use a Send Clipboard shortcut.</p>
+
+    <h2>Open source</h2>
+    <p>All of Holt is open source under the MIT license. You can read exactly what it does, or build it yourself, at <a href="https://github.com/snowztech/holt" target="_blank" rel="noopener">github.com/snowztech/holt</a>.</p>
+
+    <h2>Questions</h2>
+    <p>Open an issue on <a href="https://github.com/snowztech/holt/issues" target="_blank" rel="noopener">GitHub</a>.</p>
+  </main>
+
+  <footer class="wrap footer">
+    <a class="brand" href="./">
+      <svg class="brand-mark" aria-hidden="true"><use href="#skip-face" /></svg>
+      <span class="brand-name">Holt</span>
+    </a>
+    <span>MIT licensed · made by <a href="https://github.com/snowztech" target="_blank" rel="noopener">snowztech</a></span>
+    <a href="privacy">Privacy</a>
+  </footer>
+</body>
+</html>
