@@ -12,9 +12,9 @@ python3 -m http.server 8000
 
 ## Deploy
 
-`.github/workflows/site.yml` publishes this folder to GitHub Pages on every push to main that touches `site/`, at https://snowztech.github.io/holt/. Run it by hand from the Actions tab too.
+`.github/workflows/site.yml` publishes this folder to GitHub Pages on every push to main that touches `site/`. Run it by hand from the Actions tab too.
 
-For a custom domain, add a `CNAME` file here with the domain, point the domain's DNS at GitHub Pages, and update the `og:` URLs in `index.html`.
+It's served at https://holt.snowztech.com: a CNAME record `holt` → `snowztech.github.io` at Hostinger, and the custom domain set in the repo's Settings → Pages. With a workflow deploy, GitHub uses that setting, not a `CNAME` file.
 
 ## Notes
 

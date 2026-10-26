@@ -6,7 +6,8 @@
 
 <p align="center">
   <strong>Your clipboard, kept.</strong><br>
-  Clipboard history for macOS, synced between your Macs. Free and open source.
+  Clipboard history for macOS, synced between your Macs. Free and open source.<br>
+  <a href="https://holt.snowztech.com">holt.snowztech.com</a>
 </p>
 
 <p align="center">

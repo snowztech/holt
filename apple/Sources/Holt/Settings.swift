@@ -233,6 +233,7 @@ private struct AboutTab: View {
                 .font(.callout)
                 .foregroundStyle(.tertiary)
             HStack(spacing: 16) {
+                Link("Website", destination: URL(string: "https://holt.snowztech.com")!)
                 Link("GitHub", destination: URL(string: "https://github.com/snowztech/holt")!)
                 Link("Report an issue", destination: URL(string: "https://github.com/snowztech/holt/issues/new/choose")!)
             }

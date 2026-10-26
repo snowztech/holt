@@ -25,7 +25,7 @@ cask "holt" do
   url "https://github.com/snowztech/holt/releases/download/v#{version}/Holt.dmg"
   name "Holt"
   desc "Clipboard history, synced between your Macs"
-  homepage "https://github.com/snowztech/holt"
+  homepage "https://holt.snowztech.com"
 
   livecheck do
     url :url
