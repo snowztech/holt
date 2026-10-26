@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Holt, your clipboard, kept</title>
+  <meta name="description" content="Holt remembers everything you copy on your Mac. Press ⇧⌘V to find it, and pair your Macs so a copy on one is a paste on the other. Free and open source." />
+  <meta property="og:title" content="Holt" />
+  <meta property="og:description" content="Your clipboard, kept. Clipboard history for macOS, synced between your Macs. Free and open source." />
+  <meta property="og:image" content="assets/icon-512.png" />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#0b1110" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <script>
+    // Before paint, so there's no flash: saved choice, else the system's.
+    try {
+      var t = localStorage.getItem("theme");
+      if (t === "light" || (!t && matchMedia("(prefers-color-scheme: light)").matches)) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@snowztech/ui-css@0.3.0/dist/snowztech-ui.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@snowztech/ui-js@0.2.0/dist/snowztech-ui.esm.js"></script>
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="cairn" viewBox="0 0 18 18">
+        <ellipse cx="9" cy="14.2" rx="7.5" ry="2.6" />
+        <ellipse cx="9" cy="8.45" rx="5.2" ry="2.25" transform="rotate(4 9 8.45)" />
+        <ellipse class="cairn-top" cx="9.5" cy="3.4" rx="3.1" ry="2" transform="rotate(-6 9.5 3.4)" />
+      </symbol>
+      <symbol id="skip" viewBox="0 0 200 200">
+        <circle cx="46" cy="60" r="16" fill="#7A5236" />
+        <circle cx="154" cy="60" r="16" fill="#7A5236" />
+        <circle cx="46" cy="60" r="7" fill="#563824" />
+        <circle cx="154" cy="60" r="7" fill="#563824" />
+        <ellipse cx="100" cy="104" rx="72" ry="63" fill="#7A5236" />
+        <ellipse cx="100" cy="130" rx="48" ry="34" fill="#EAD6C0" />
+        <ellipse cx="72" cy="98" rx="8.5" ry="9.5" fill="#1D1512" />
+        <ellipse cx="128" cy="98" rx="8.5" ry="9.5" fill="#1D1512" />
+        <circle cx="75" cy="94.5" r="2.8" fill="#fff" />
+        <circle cx="131" cy="94.5" r="2.8" fill="#fff" />
+        <path d="M88 113 Q100 104 112 113 Q112 122 100 124 Q88 122 88 113Z" fill="#1D1512" />
+        <path d="M100 124 V131 M100 131 Q92 139 84 133 M100 131 Q108 139 116 133" fill="none" stroke="#1D1512" stroke-width="3" stroke-linecap="round" />
+        <path d="M62 124 L34 118 M62 131 L33 133 M138 124 L166 118 M138 131 L167 133" fill="none" stroke="#563824" stroke-width="2.2" stroke-linecap="round" />
+        <ellipse cx="100" cy="174" rx="24" ry="15" fill="#A9B0AB" />
+        <ellipse cx="93" cy="169" rx="7" ry="3.5" fill="#fff" opacity="0.35" />
+        <ellipse cx="77" cy="171" rx="11" ry="9" fill="#563824" />
+        <ellipse cx="123" cy="171" rx="11" ry="9" fill="#563824" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <header class="nav wrap">
+    <a class="brand" href="#" aria-label="Holt home">
+      <svg class="brand-mark"><use href="#cairn" /></svg>
+      <span class="brand-name">holt</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#sync">Sync</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/snowztech/holt" target="_blank" rel="noopener">GitHub</a>
+      <button class="sn-theme-toggle" data-sn-theme-toggle aria-label="Switch light and dark">
+        <span class="sn-theme-toggle__indicator"></span>
+      </button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <span class="sn-meta">Free and open source · macOS 14 and later</span>
+        <h1>Your clipboard,<br />kept.</h1>
+        <p class="lede">
+          Holt remembers everything you copy. Press <kbd class="sn-kbd">⇧⌘V</kbd> to find it again,
+          and pair your Macs so a copy on one is a paste on the other.
+        </p>
+        <div class="cta">
+          <a class="sn-btn sn-btn--accent sn-btn--lg" href="#install">Get Holt</a>
+          <a class="sn-btn sn-btn--secondary sn-btn--lg" href="https://github.com/snowztech/holt" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+      </div>
+
+      <div class="stage" aria-label="Holt's popup showing recent clips, with a notice that a clip arrived from another Mac">
+        <div class="toast" aria-hidden="true">
+          <svg class="toast-mark"><use href="#cairn" /></svg>
+          <div>
+            <strong>From MacBook Pro</strong>
+            <span>github.com/snowztech/holt</span>
+          </div>
+        </div>
+        <div class="popup" aria-hidden="true">
+          <div class="popup-search">
+            <svg class="popup-mark"><use href="#cairn" /></svg>
+            <span class="popup-query"><span id="demo-query"></span><i class="caret"></i><span class="placeholder" id="demo-placeholder">Search your clips</span></span>
+          </div>
+          <div class="popup-body">
+            <ul class="popup-list" id="demo-list">
+              <li class="popup-section">TODAY</li>
+              <li class="row sel" data-text="https://github.com/snowztech/holt" data-meta="Safari · MacBook Pro · 8 seconds ago"><i class="app a1"></i><span class="txt">https://github.com/snowztech/holt</span><span class="dev">MacBook Pro</span><span class="age">8s</span></li>
+              <li class="row" data-text="ssh deploy@10.0.0.4 -p 2222" data-meta="Terminal · 3 minutes ago"><i class="app a2"></i><span class="txt">ssh deploy@10.0.0.4 -p 2222</span><span class="age">3m</span></li>
+              <li class="row" data-text="Invoice #2031 · due Friday" data-meta="Mail · Mac mini · 12 minutes ago"><i class="app a3"></i><span class="txt">Invoice #2031 · due Friday</span><span class="dev">Mac mini</span><span class="age">12m</span></li>
+              <li class="row" data-text="#0F6E68" data-meta="Figma · 40 minutes ago"><i class="app a4"></i><span class="txt"><b class="swatch"></b>#0F6E68</span><span class="age">40m</span></li>
+              <li class="row" data-text="Thanks! I'll send the contract by Friday." data-meta="Messages · 1 hour ago"><i class="app a5"></i><span class="txt">Thanks! I'll send the contract by Friday.</span><span class="age">1h</span></li>
+              <li class="row" data-text="brew install ripgrep" data-meta="Terminal · 2 hours ago"><i class="app a2"></i><span class="txt">brew install ripgrep</span><span class="age">2h</span></li>
+            </ul>
+            <div class="popup-preview">
+              <span class="preview-meta" id="preview-meta">Safari · MacBook Pro · 8 seconds ago</span>
+              <div id="preview-body">
+                <div class="preview-link">
+                  <strong>github.com</strong>
+                  <span>https://github.com/snowztech/holt</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="popup-foot">
+            <span class="sync"><i></i>Synced with MacBook Pro</span>
+            <span class="actions"><span>Pin <kbd>⌘P</kbd></span><span class="primary">Paste in Notes <kbd>↩</kbd></span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="wrap section">
+      <div class="section-head">
+        <span class="sn-meta">What it does</span>
+        <h2>Everything you copied, one shortcut away</h2>
+      </div>
+      <div class="features">
+        <article class="feature">
+          <h3>Find it by typing</h3>
+          <p>Type any part of what you copied. Every word has to match, so <code>ssh 10.0</code> finds that one command from last week.</p>
+        </article>
+        <article class="feature">
+          <h3>Paste where you were</h3>
+          <p>Pick a clip and press return. Holt pastes it into the app you were typing in, without stealing focus.</p>
+        </article>
+        <article class="feature">
+          <h3>Pin what you reuse</h3>
+          <p>Pinned clips stay at the top and never expire. Your address, a sign-off, the command you always forget.</p>
+        </article>
+        <article class="feature">
+          <h3>On every Mac</h3>
+          <p>Pair your Macs once. Copy on one, press <kbd class="sn-kbd">⌘V</kbd> on the other a second later. Pins and deletes sync too.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="sync" class="wrap section split">
+      <div class="section-head">
+        <span class="sn-meta">How sync works</span>
+        <h2>Copy here. Paste there.</h2>
+        <p>
+          Pair two Macs with a 6-digit code, like an Apple TV. After that they stay connected and send each other what you copy.
+          No Bluetooth, no account, and no need to be in the same room.
+        </p>
+      </div>
+      <ol class="paths">
+        <li>
+          <span class="path-label">Same Wi-Fi</span>
+          <p>The Macs talk directly over your local network. Your clips never leave the house.</p>
+        </li>
+        <li>
+          <span class="path-label">Different networks</span>
+          <p>Office and home, or a Mac on your phone's hotspot: they connect directly over the internet.</p>
+        </li>
+        <li>
+          <span class="path-label">Router in the way</span>
+          <p>If a firewall blocks the direct path, a relay passes the data along. It's end-to-end encrypted, so the relay only sees bytes it can't read.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="privacy" class="wrap section">
+      <div class="privacy sn-card sn-card--rounded">
+        <div>
+          <span class="sn-meta">Privacy</span>
+          <h2>Your clips are yours</h2>
+        </div>
+        <ul class="checks">
+          <li>History stays on your Macs. There's no Holt account and no Holt server.</li>
+          <li>Copies that password managers mark as private are never recorded.</li>
+          <li>Choose apps whose copies Holt should ignore.</li>
+          <li>Sync is end-to-end encrypted, and only your paired Macs can connect.</li>
+          <li>The code is open source under the MIT license. Read it, build it yourself.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="wrap section keys">
+      <div class="section-head">
+        <span class="sn-meta">Keyboard first</span>
+        <h2>Never touch the mouse</h2>
+      </div>
+      <dl class="keylist">
+        <div><dt><kbd class="sn-kbd">⇧⌘V</kbd></dt><dd>Open Holt. Change it in Settings.</dd></div>
+        <div><dt><kbd class="sn-kbd">↑</kbd> <kbd class="sn-kbd">↓</kbd></dt><dd>Move through clips</dd></div>
+        <div><dt><kbd class="sn-kbd">↩</kbd></dt><dd>Paste the clip</dd></div>
+        <div><dt><kbd class="sn-kbd">⌘1</kbd>…<kbd class="sn-kbd">⌘9</kbd></dt><dd>Paste one of the first nine</dd></div>
+        <div><dt><kbd class="sn-kbd">⌘P</kbd></dt><dd>Pin or unpin</dd></div>
+        <div><dt><kbd class="sn-kbd">⌘⌫</kbd></dt><dd>Delete, here and on your other Macs</dd></div>
+      </dl>
+    </section>
+
+    <section class="wrap section skip">
+      <svg class="skip-art" role="img" aria-label="Skip the otter holding a pebble"><use href="#skip" /></svg>
+      <div>
+        <span class="sn-meta">Meet Skip</span>
+        <h2>Why an otter?</h2>
+        <p>
+          A holt is an otter's den. Sea otters keep a favorite stone tucked under their arm and carry it everywhere.
+          Skip does the same with what you copy: each clip is a pebble, your history is the cairn, and syncing is skipping a stone across to your other Mac.
+        </p>
+      </div>
+    </section>
+
+    <section id="install" class="wrap section">
+      <div class="section-head">
+        <span class="sn-meta">Install</span>
+        <h2>Get Holt</h2>
+        <p>
+          The first signed download is on its way. <a href="https://github.com/snowztech/holt/releases" target="_blank" rel="noopener">Watch the releases</a> to hear when it ships.
+          Until then, building it takes one command with Xcode and Rust installed.
+        </p>
+      </div>
+      <div class="install sn-card sn-card--rounded sn-card--inset">
+        <code id="install-cmd">git clone https://github.com/snowztech/holt &amp;&amp; cd holt &amp;&amp; make run</code>
+        <button class="sn-copy-btn" data-sn-copy="git clone https://github.com/snowztech/holt && cd holt && make run" aria-label="Copy command">
+          <span class="sn-copy-btn__idle">copy</span>
+          <span class="sn-copy-btn__copied">copied</span>
+        </button>
+      </div>
+      <p class="fine">On first launch, a short checklist walks you through the two macOS permissions Holt needs.</p>
+    </section>
+
+    <section class="wrap section">
+      <div class="section-head">
+        <span class="sn-meta">Roadmap</span>
+        <h2>Where Holt is going</h2>
+      </div>
+      <ol class="roadmap">
+        <li class="done"><span class="sn-badge sn-badge--accent">shipped</span><strong>Mac history</strong><span>Search, pins, paste where you were.</span></li>
+        <li class="done"><span class="sn-badge sn-badge--accent">shipped</span><strong>Sync between Macs</strong><span>Pair with a code, over any network.</span></li>
+        <li><span class="sn-badge">next</span><strong>iPhone</strong><span>Double-tap the back of your phone to send what you copied.</span></li>
+        <li><span class="sn-badge">later</span><strong>Images and screenshots</strong><span>Search the text inside them.</span></li>
+        <li><span class="sn-badge">later</span><strong>Windows and Linux</strong><span>Same sync, more computers.</span></li>
+      </ol>
+    </section>
+
+    <section id="faq" class="wrap section">
+      <div class="section-head">
+        <span class="sn-meta">FAQ</span>
+        <h2>Questions</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>Does sync use Bluetooth or Wi-Fi?</summary>
+          <p>Neither directly. It uses your network connection, whatever it is: Wi-Fi, Ethernet or a phone hotspot. On the same network the Macs talk locally. Otherwise they connect over the internet.</p>
+        </details>
+        <details>
+          <summary>Do my clips go through a server?</summary>
+          <p>Usually not. Your Macs connect directly. When a router blocks that, an encrypted relay forwards the data. It can't read it, and it doesn't store it.</p>
+        </details>
+        <details>
+          <summary>How is this different from Apple's Universal Clipboard?</summary>
+          <p>Universal Clipboard needs Bluetooth, both devices nearby, and forgets a copy after about two minutes. Holt works across networks and keeps a searchable history.</p>
+        </details>
+        <details>
+          <summary>What about passwords?</summary>
+          <p>Password managers like 1Password and Bitwarden mark their copies as private, and Holt never records those. You can also tell Holt to ignore any app.</p>
+        </details>
+        <details>
+          <summary>Is it really free?</summary>
+          <p>Yes. Holt is MIT licensed and has no paid tier. It's made by <a href="https://github.com/snowztech" target="_blank" rel="noopener">snowztech</a>.</p>
+        </details>
+        <details>
+          <summary>Does it work on iPhone?</summary>
+          <p>Not yet. The iPhone app is next on the roadmap.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <a class="brand" href="#">
+      <svg class="brand-mark"><use href="#cairn" /></svg>
+      <span class="brand-name">holt</span>
+    </a>
+    <span>MIT licensed · made by <a href="https://github.com/snowztech" target="_blank" rel="noopener">snowztech</a></span>
+    <a href="https://github.com/snowztech/holt" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+</body>
+</html>
