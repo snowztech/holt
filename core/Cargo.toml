@@ -1,0 +1,7 @@
+[workspace]
+members = ["holt-core"]
+resolver = "2"
+
+[profile.release]
+lto = true
+strip = true

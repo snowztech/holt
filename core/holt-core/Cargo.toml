@@ -1,0 +1,17 @@
+[package]
+name = "holt-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "holt_core"
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+rusqlite = { version = "0.41", features = ["bundled"] }
+uniffi = { version = "0.32", features = ["cli"] }
