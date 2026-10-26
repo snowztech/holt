@@ -6,11 +6,11 @@
 
 <p align="center">
   <strong>Your clipboard, kept.</strong><br>
-  Clipboard history for macOS, synced between your Macs. Free and open source.<br>
-  <a href="https://holt.snowztech.com">holt.snowztech.com</a>
+  Clipboard history for macOS, synced between your Macs. Free and open source.
 </p>
 
 <p align="center">
+  <a href="https://holt.snowztech.com"><img src="https://img.shields.io/badge/website-holt.snowztech.com-2E9C93" alt="Website"></a>
   <a href="https://github.com/snowztech/holt/actions/workflows/ci.yml"><img src="https://github.com/snowztech/holt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/snowztech/holt/releases/latest"><img src="https://img.shields.io/github/v/release/snowztech/holt?color=2E9C93&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2E9C93" alt="MIT license"></a>
@@ -19,8 +19,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="site/assets/readme-popup-light.png">
-    <img src="site/assets/readme-popup-dark.png" width="760" alt="Holt's popup: a search field, recent clips with the app and Mac they came from, a preview of the selected link, and a notice that a clip arrived from a MacBook Pro">
+    <source media="(prefers-color-scheme: light)" srcset="site/assets/readme-hero-light.png">
+    <img src="site/assets/readme-hero-dark.png" width="720" alt="Holt's popup: a search field, recent clips with the app and Mac they came from, a preview of the selected link, and a notice that a clip arrived from a MacBook Pro">
   </picture>
 </p>
 

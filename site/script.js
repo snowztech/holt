@@ -39,7 +39,8 @@
     const text = row.dataset.text;
     if (text.startsWith("https://")) {
       body.innerHTML = `<div class="preview-link"><strong>${new URL(text).host}</strong><span></span></div>`;
-      body.querySelector("span").textContent = text;
+      // Break long links after a slash, not in the middle of a word.
+      body.querySelector("span").textContent = text.replace(/\//g, "/\u200b");
     } else {
       body.innerHTML = `<p class="preview-text"></p>`;
       body.querySelector("p").textContent = text;

@@ -20,5 +20,5 @@ It's served at https://holt.snowztech.com: a CNAME record `holt` → `snowztech.
 
 - The hero popup is HTML, not a screenshot, so it stays sharp and follows the light and dark theme. It mirrors `apple/Sources/Holt/Popup.swift`; update it when the app's look changes.
 - Skip (`#skip`) and Skip's face, the logo (`#skip-face`), are inline SVG, the same shapes the app draws from `SkipFace` in `Brand.swift`.
-- `assets/readme-popup-dark.png` and `readme-popup-light.png` are the README picture: the hero popup, laid out wider, rendered at 2x in headless Chrome with a transparent background so it sits on GitHub's own background in both themes.
+- `assets/readme-hero-dark.png` and `readme-hero-light.png` are the README picture: the hero popup rendered 720 CSS pixels wide at 2x in headless Chrome, with a transparent background. The README shows it at `width="720"`, so it's never scaled.
 - `assets/icon-512.png` comes from `make icon` in the repo root (`build/icon-1024.png`, resized).
