@@ -4,9 +4,14 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-26
+
+Holt now keeps itself up to date.
+
 ### Added
 
-- Holt updates itself. It checks once a day, and when a new version is out, the menu bar menu offers it. Check for Updates in the same menu looks right away. This starts with the next version: 0.1.0 doesn't have it yet, so install that one update by hand or with `brew upgrade --cask holt`.
+- Holt updates itself. It checks once a day, and when a new version is out, the menu bar menu offers it. Check for Updates in the same menu looks right away.
+- Coming from 0.1.0, install this one update yourself: download it again, or run `brew upgrade --cask holt`. From here on, Holt does it for you.
 
 ## [0.1.0] - 2026-10-26
 
@@ -23,5 +28,6 @@ The first release. Holt keeps everything you copy on your Mac, and pairs your Ma
 - A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
 - Settings to change the shortcut and choose how long to keep history.
 
-[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/snowztech/holt/releases/tag/v0.1.1
 [0.1.0]: https://github.com/snowztech/holt/releases/tag/v0.1.0
