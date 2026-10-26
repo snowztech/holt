@@ -94,7 +94,7 @@ impl Store {
         Ok(Some(clip))
     }
 
-    /// Newest first. Every whitespace-separated word in the query must appear
+    /// Pinned clips first, then newest first. Every whitespace-separated word in the query must appear
     /// somewhere in the clip, case-insensitively. An empty query lists recent clips.
     pub fn search(&self, query: String, limit: u32) -> Result<Vec<Clip>> {
         // A LIKE scan is fine for a few thousand rows. Switch to an FTS5 trigram
@@ -109,7 +109,7 @@ impl Store {
         for _ in &words {
             sql.push_str(" AND text LIKE ? ESCAPE '\\'");
         }
-        sql.push_str(&format!(" ORDER BY created_at DESC LIMIT {limit}"));
+        sql.push_str(&format!(" ORDER BY pinned DESC, created_at DESC LIMIT {limit}"));
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(&sql)?;
@@ -258,7 +258,7 @@ mod tests {
         }
 
         assert_eq!(s.prune(30, 2).unwrap(), 3);
-        assert_eq!(texts(&s.search("".into(), 10).unwrap()), ["clip 4", "clip 3", "pinned"]);
+        assert_eq!(texts(&s.search("".into(), 10).unwrap()), ["pinned", "clip 4", "clip 3"]);
 
         s.clear().unwrap();
         assert_eq!(texts(&s.search("".into(), 10).unwrap()), ["pinned"]);

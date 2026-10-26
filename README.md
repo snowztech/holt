@@ -43,7 +43,7 @@ apple/            SwiftPM package: the menu bar app
 Makefile          core, mac, run, test, clean
 ```
 
-`make test` runs the core tests.
+`make test` runs the core tests. `make icon` redraws `apple/AppIcon.icns` from the Skip drawing in `Brand.swift`.
 
 ## Roadmap
 

@@ -2,13 +2,13 @@ import AppKit
 import SwiftUI
 import HoltCore
 
-private let river = Color(red: 0.06, green: 0.43, blue: 0.41)
-
 @MainActor
 final class PopupModel: ObservableObject {
     @Published var query = "" { didSet { selection = 0; refresh() } }
     @Published private(set) var clips: [Clip] = []
     @Published var selection = 0
+    /// The app that will receive the paste, shown in the action bar.
+    @Published private(set) var targetApp: String?
     /// Bumped on every show so the view can refocus the search field.
     @Published private(set) var shown = 0
 
@@ -19,6 +19,7 @@ final class PopupModel: ObservableObject {
     var selected: Clip? { clips.indices.contains(selection) ? clips[selection] : nil }
 
     func reset() {
+        targetApp = NSWorkspace.shared.frontmostApplication?.localizedName
         query = ""
         shown += 1
     }
@@ -37,6 +38,8 @@ final class PopupModel: ObservableObject {
         guard let clip = selected else { return }
         try? store.setPinned(id: clip.id, pinned: !clip.pinned)
         refresh()
+        // Pinning moves the clip, so keep it selected.
+        if let index = clips.firstIndex(where: { $0.id == clip.id }) { selection = index }
     }
 
     func deleteSelected() {
@@ -63,7 +66,7 @@ final class PopupController {
         self.onPick = onPick
         model = PopupModel(store: store)
         panel = PopupPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 440),
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 460),
             styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -77,7 +80,7 @@ final class PopupController {
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             panel.standardWindowButton(button)?.isHidden = true
         }
-        panel.contentView = NSHostingView(rootView: PopupView(model: model, onPick: { [weak self] in self?.pick($0) }))
+        panel.contentView = NSHostingView(rootView: PopupView(model: model, onPick: { [weak self] in self?.onPick($0) }))
 
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.close() }
@@ -110,25 +113,25 @@ final class PopupController {
         keyMonitor = nil
     }
 
-    private func pick(_ clip: Clip) {
-        onPick(clip)
-    }
-
     /// Returns nil for keys the popup handles, so the search field never sees them.
     private func handle(_ event: NSEvent) -> NSEvent? {
         let command = event.modifierFlags.contains(.command)
         switch Int(event.keyCode) {
-        case 125: model.move(1)                              // ↓
-        case 126: model.move(-1)                             // ↑
-        case 36, 76: if let clip = model.selected { pick(clip) } // return, enter
-        case 53: close()                                     // esc
-        case 51 where command: model.deleteSelected()        // ⌘⌫
+        case 125: model.move(1)                                    // ↓
+        case 126: model.move(-1)                                   // ↑
+        case 36, 76: if let clip = model.selected { onPick(clip) } // return, enter
+        case 53: close()                                           // esc
+        case 51 where command: model.deleteSelected()              // ⌘⌫
         default:
             guard command, let key = event.charactersIgnoringModifiers else { return event }
             if key == "p" {
                 model.togglePin()
+            } else if key == "o", let clip = model.selected, clip.kind == .link,
+                      let url = URL(string: clip.text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                close()
+                NSWorkspace.shared.open(url)
             } else if let n = Int(key), (1...9).contains(n), model.clips.indices.contains(n - 1) {
-                pick(model.clips[n - 1])
+                onPick(model.clips[n - 1])
             } else {
                 return event
             }
@@ -144,43 +147,35 @@ struct PopupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "pawprint.fill").foregroundStyle(river)
-                TextField("Search clips", text: $model.query)
+            HStack(spacing: 12) {
+                Image(systemName: "pawprint.fill")
+                    .font(.system(size: 17))
+                    .foregroundStyle(Brand.river)
+                TextField("Search your clips", text: $model.query)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 18))
+                    .font(.system(size: 20))
                     .focused($searchFocused)
-                Text("⇧⌘V").font(.caption.monospaced()).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 18)
+            .frame(height: 56)
             Divider()
 
             if model.clips.isEmpty {
-                emptyState
+                EmptyState(query: model.query)
             } else {
                 HStack(spacing: 0) {
                     list
                     Divider()
                     if let clip = model.selected {
-                        ClipPreview(clip: clip).frame(width: 280)
+                        ClipPreview(clip: clip).frame(width: 300)
                     }
                 }
             }
 
             Divider()
-            HStack(spacing: 16) {
-                hint("↑↓", "Move")
-                hint("⏎", "Paste")
-                hint("⌘P", "Pin")
-                hint("⌘⌫", "Delete")
-                hint("esc", "Close")
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
+            ActionBar(clip: model.selected, targetApp: model.targetApp)
         }
-        .frame(width: 720, height: 440)
+        .frame(width: 760, height: 460)
         .background(.regularMaterial)
         // Draw under the panel's hidden title bar instead of leaving a gap.
         .ignoresSafeArea()
@@ -190,61 +185,68 @@ struct PopupView: View {
     private var list: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(Array(model.clips.enumerated()), id: \.element.id) { index, clip in
-                        ClipRow(clip: clip, index: index, selected: index == model.selection)
+                        let section = sectionTitle(clip)
+                        if index == 0 || sectionTitle(model.clips[index - 1]) != section {
+                            Text(section)
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, index == 0 ? 4 : 12)
+                                .padding(.bottom, 4)
+                        }
+                        ClipRow(clip: clip, index: index, query: model.query, selected: index == model.selection)
                             .id(clip.id)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { onPick(clip) }
                             .onTapGesture { model.selection = index }
                     }
                 }
-                .padding(6)
+                .padding(8)
             }
             .onChange(of: model.selection) {
                 if let clip = model.selected { proxy.scrollTo(clip.id) }
             }
         }
     }
-
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "pawprint").font(.system(size: 32)).foregroundStyle(river)
-            Text(model.query.isEmpty ? "Skip has nothing yet. Copy something." : "No clips match “\(model.query)”.")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func hint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            Text(key).font(.caption.monospaced())
-            Text(label).font(.caption)
-        }
-        .foregroundStyle(.secondary)
-    }
 }
 
 private struct ClipRow: View {
     let clip: Clip
     let index: Int
+    let query: String
     let selected: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            SourceIcon(bundleID: clip.sourceApp).frame(width: 22, height: 22)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(oneLine(clip.text)).lineLimit(1).truncationMode(.tail)
-                Text(meta(clip)).font(.caption).opacity(selected ? 0.8 : 0.6)
+            SourceIcon(clip: clip).frame(width: 20, height: 20)
+            Text(highlight(oneLine(clip.text), query))
+                .font(.system(size: 13.5))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 12)
+            if clip.pinned {
+                Image(systemName: "pin.fill").font(.system(size: 10)).opacity(0.7)
             }
-            Spacer(minLength: 8)
-            if clip.pinned { Image(systemName: "pin.fill").font(.caption) }
-            if index < 9 { Text("⌘\(index + 1)").font(.caption.monospaced()).opacity(0.6) }
+            Text(shortAge(clip))
+                .font(.system(size: 11.5).monospacedDigit())
+                .opacity(0.55)
+            if index < 9 {
+                Text("⌘\(index + 1)")
+                    .font(.system(size: 11, design: .rounded))
+                    .opacity(selected ? 0.8 : 0.35)
+                    .frame(width: 24, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .frame(height: 34)
         .foregroundStyle(selected ? Color.white : Color.primary)
-        .background(selected ? river : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+        .background {
+            if selected {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Brand.riverDeep)
+            }
+        }
     }
 }
 
@@ -252,30 +254,128 @@ private struct ClipPreview: View {
     let clip: Clip
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(meta(clip)).font(.caption).foregroundStyle(river)
-            ScrollView {
-                Text(clip.text)
-                    .font(clip.text.contains("\n") ? .system(.body, design: .monospaced) : .body)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                SourceIcon(clip: clip).frame(width: 18, height: 18)
+                Text(AppInfo.name(clip.sourceApp) ?? "Unknown app")
+                    .font(.system(size: 12.5, weight: .medium))
+                Spacer()
+                Text(longAge(clip)).font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            Text("\(clip.kind == .link ? "Link" : "Text") · \(clip.text.count) characters")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+
+            if clip.kind == .link {
+                linkCard
+            } else {
+                ScrollView {
+                    Text(clip.text)
+                        .font(isCode ? .system(size: 12, design: .monospaced) : .system(size: 14))
+                        .lineSpacing(isCode ? 2 : 3)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            Spacer(minLength: 0)
+            Divider()
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
+                info("Type", clip.kind == .link ? "Link" : "Text")
+                info("Characters", clip.text.count.formatted())
+                if lineCount > 1 { info("Lines", lineCount.formatted()) }
+            }
+            .font(.system(size: 12))
         }
         .padding(16)
+    }
+
+    private var lineCount: Int { clip.text.split(whereSeparator: \.isNewline).count }
+    private var isCode: Bool { lineCount > 1 }
+
+    private var linkCard: some View {
+        let url = URL(string: clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
+        return VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: "link").foregroundStyle(Brand.river)
+            Text(url?.host() ?? clip.text)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .lineLimit(2)
+            Text(clip.text)
+                .font(.system(size: 11.5, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+                .textSelection(.enabled)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.river.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func info(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label).foregroundStyle(.secondary)
+            Text(value).monospacedDigit()
+        }
+    }
+}
+
+private struct ActionBar: View {
+    let clip: Clip?
+    let targetApp: String?
+
+    var body: some View {
+        HStack(spacing: 18) {
+            HStack(spacing: 6) {
+                Image(systemName: "pawprint.fill").foregroundStyle(Brand.river)
+                Text("Holt").font(.system(size: 12, weight: .semibold, design: .rounded))
+            }
+            Spacer()
+            if let clip {
+                if clip.kind == .link { action("Open", "⌘O") }
+                action(clip.pinned ? "Unpin" : "Pin", "⌘P")
+                action("Delete", "⌘⌫")
+                action(targetApp.map { "Paste in \($0)" } ?? "Paste", "⏎", primary: true)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 40)
+    }
+
+    private func action(_ label: String, _ key: String, primary: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.system(size: 12, weight: primary ? .semibold : .regular))
+                .foregroundStyle(primary ? .primary : .secondary)
+            Text(key)
+                .font(.system(size: 11, design: .rounded))
+                .padding(.horizontal, 5)
+                .frame(minWidth: 20, minHeight: 18)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        }
+    }
+}
+
+private struct EmptyState: View {
+    let query: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Skip().frame(width: 96, height: 96)
+            Text(query.isEmpty ? "Skip has nothing yet" : "No clips match “\(query)”")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+            Text(query.isEmpty ? "Copy something and it shows up here." : "Try fewer words, or part of a word.")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct SourceIcon: View {
-    let bundleID: String?
+    let clip: Clip
 
     var body: some View {
-        if let icon = AppInfo.icon(bundleID) {
+        if let icon = AppInfo.icon(clip.sourceApp) {
             Image(nsImage: icon).resizable()
         } else {
-            Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
+            Image(systemName: clip.kind == .link ? "link" : "text.alignleft")
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -304,21 +404,56 @@ private enum AppInfo {
     }
 }
 
+private func date(_ clip: Clip) -> Date {
+    Date(timeIntervalSince1970: TimeInterval(clip.createdAt) / 1000)
+}
+
+private func sectionTitle(_ clip: Clip) -> String {
+    if clip.pinned { return "PINNED" }
+    let calendar = Calendar.current
+    if calendar.isDateInToday(date(clip)) { return "TODAY" }
+    if calendar.isDateInYesterday(date(clip)) { return "YESTERDAY" }
+    return "EARLIER"
+}
+
+/// "now", "42s", "5m", "3h", "12d".
+private func shortAge(_ clip: Clip) -> String {
+    let seconds = Int(Date().timeIntervalSince(date(clip)))
+    switch seconds {
+    case ..<5: return "now"
+    case ..<60: return "\(seconds)s"
+    case ..<3600: return "\(seconds / 60)m"
+    case ..<86_400: return "\(seconds / 3600)h"
+    default: return "\(seconds / 86_400)d"
+    }
+}
+
 private let relative: RelativeDateTimeFormatter = {
     let f = RelativeDateTimeFormatter()
-    f.unitsStyle = .abbreviated
+    f.unitsStyle = .full
     return f
 }()
 
-@MainActor
-private func meta(_ clip: Clip) -> String {
-    let date = Date(timeIntervalSince1970: TimeInterval(clip.createdAt) / 1000)
-    let when = relative.localizedString(for: date, relativeTo: Date())
-    return [AppInfo.name(clip.sourceApp), when].compactMap { $0 }.joined(separator: " · ")
+private func longAge(_ clip: Clip) -> String {
+    relative.localizedString(for: date(clip), relativeTo: Date())
 }
 
 private func oneLine(_ text: String) -> String {
     text.trimmingCharacters(in: .whitespacesAndNewlines)
         .split(whereSeparator: \.isNewline)
         .joined(separator: " ⏎ ")
+}
+
+/// Bolds every place a query word appears, matching how search works.
+private func highlight(_ text: String, _ query: String) -> AttributedString {
+    var result = AttributedString(text)
+    for word in query.split(whereSeparator: \.isWhitespace) {
+        var start = result.startIndex
+        while start < result.endIndex,
+              let range = result[start...].range(of: word, options: .caseInsensitive) {
+            result[range].inlinePresentationIntent = .stronglyEmphasized
+            start = range.upperBound
+        }
+    }
+    return result
 }
