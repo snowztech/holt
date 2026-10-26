@@ -90,12 +90,17 @@ impl Node {
     /// Makes this device pairable and returns the code to show the user.
     pub fn start_pairing(&self) -> String {
         let code = format!("{:06}", rand::random_range(0..1_000_000u32));
-        *self.inner.pairing.lock().unwrap() = Some(Pairing { code: code.clone(), failures: 0 });
+        *self.inner.pairing.lock().unwrap() = Some(Pairing {
+            code: code.clone(),
+            failures: 0,
+        });
         let mut advert = format!("{PAIR_PREFIX}{}", self.inner.name);
         while advert.len() > UserData::MAX_LENGTH {
             advert.pop();
         }
-        self.inner.endpoint.set_user_data_for_address_lookup(advert.parse().ok());
+        self.inner
+            .endpoint
+            .set_user_data_for_address_lookup(advert.parse().ok());
         code
     }
 
@@ -113,7 +118,11 @@ impl Node {
             .unwrap()
             .iter()
             .filter(|(id, _)| !paired.contains(&id.to_string()))
-            .map(|(id, name)| Device { id: id.to_string(), name: name.clone(), online: true })
+            .map(|(id, name)| Device {
+                id: id.to_string(),
+                name: name.clone(),
+                online: true,
+            })
             .collect();
         devices.sort_by(|a, b| a.name.cmp(&b.name));
         devices
@@ -122,7 +131,9 @@ impl Node {
     /// Pairs with a nearby device using the code it shows. Blocks until done,
     /// so call it off the main thread.
     pub fn pair(&self, device_id: String, code: String) -> Result<Device> {
-        let id: EndpointId = device_id.parse().map_err(|_| HoltError::Pairing("That device isn't available.".into()))?;
+        let id: EndpointId = device_id
+            .parse()
+            .map_err(|_| HoltError::Pairing("That device isn't available.".into()))?;
         let code: String = code.chars().filter(|c| !c.is_whitespace()).collect();
         let inner = self.inner.clone();
         self.rt.block_on(async move {
@@ -141,7 +152,12 @@ impl Node {
             .peers()?
             .into_iter()
             .map(|(id, name)| {
-                let online = id.parse::<EndpointId>().ok().and_then(|id| online.get(&id).copied()).unwrap_or(0) > 0;
+                let online = id
+                    .parse::<EndpointId>()
+                    .ok()
+                    .and_then(|id| online.get(&id).copied())
+                    .unwrap_or(0)
+                    > 0;
                 Device { id, name, online }
             })
             .collect())
@@ -167,6 +183,7 @@ impl Node {
             .enable_all()
             .build()
             .map_err(|e| HoltError::Net(e.to_string()))?;
+        store.set_device_name(&name);
         let (inner, router) = rt.block_on(async {
             let secret = SecretKey::from_bytes(&store.secret_key());
             let builder = if local_only {
@@ -177,7 +194,11 @@ impl Node {
             } else {
                 Endpoint::builder(presets::N0)
             };
-            let endpoint = builder.secret_key(secret).bind().await.map_err(|e| net(e.into()))?;
+            let endpoint = builder
+                .secret_key(secret)
+                .bind()
+                .await
+                .map_err(|e| net(e.into()))?;
             let memory = MemoryLookup::new();
             let lookup = endpoint.address_lookup().map_err(|e| net(e.into()))?;
             lookup.add(memory.clone());
@@ -193,7 +214,9 @@ impl Node {
                 dialers: Mutex::new(HashMap::new()),
             });
             if !local_only {
-                let mdns = MdnsAddressLookup::builder().build(endpoint.id()).map_err(|e| net(e.into()))?;
+                let mdns = MdnsAddressLookup::builder()
+                    .build(endpoint.id())
+                    .map_err(|e| net(e.into()))?;
                 lookup.add(mdns.clone());
                 tokio::spawn(watch_nearby(inner.clone(), mdns));
             }
@@ -208,11 +231,21 @@ impl Node {
             }
             Ok::<_, HoltError>((inner, router))
         })?;
-        Ok(Arc::new(Node { inner, _router: router, rt }))
+        Ok(Arc::new(Node {
+            inner,
+            _router: router,
+            rt,
+        }))
     }
 
     fn paired_ids(&self) -> Vec<String> {
-        self.inner.store.peers().unwrap_or_default().into_iter().map(|(id, _)| id).collect()
+        self.inner
+            .store
+            .peers()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect()
     }
 }
 
@@ -258,7 +291,10 @@ impl Inner {
 
 #[derive(Serialize, Deserialize)]
 enum SyncMsg {
-    Hello { name: String, cursors: HashMap<String, i64> },
+    Hello {
+        name: String,
+        cursors: HashMap<String, i64>,
+    },
     Rows(Vec<Row>),
 }
 
@@ -269,8 +305,19 @@ async fn sync_session(inner: Arc<Inner>, conn: Connection, dialer: bool) -> NetR
         conn.close(1u32.into(), b"not paired");
         return Ok(());
     }
-    let (mut send, mut recv) = if dialer { conn.open_bi().await? } else { conn.accept_bi().await? };
-    write_msg(&mut send, &SyncMsg::Hello { name: inner.name.clone(), cursors: inner.store.cursors()? }).await?;
+    let (mut send, mut recv) = if dialer {
+        conn.open_bi().await?
+    } else {
+        conn.accept_bi().await?
+    };
+    write_msg(
+        &mut send,
+        &SyncMsg::Hello {
+            name: inner.name.clone(),
+            cursors: inner.store.cursors()?,
+        },
+    )
+    .await?;
     let SyncMsg::Hello { name, cursors } = read_msg(&mut recv).await? else {
         return Err("expected hello".into());
     };
@@ -303,7 +350,9 @@ async fn send_changes(
             loop {
                 let after = theirs.lock().unwrap().get(&origin).copied().unwrap_or(0);
                 let rows = inner.store.rows_since(&origin, after, 200)?;
-                let Some(last) = rows.last().map(|r| r.seq) else { break };
+                let Some(last) = rows.last().map(|r| r.seq) else {
+                    break;
+                };
                 for batch in batches(rows) {
                     write_msg(send, &SyncMsg::Rows(batch)).await?;
                 }
@@ -316,7 +365,11 @@ async fn send_changes(
     }
 }
 
-async fn receive_changes(inner: &Inner, recv: &mut RecvStream, theirs: &Mutex<HashMap<String, i64>>) -> NetResult<()> {
+async fn receive_changes(
+    inner: &Inner,
+    recv: &mut RecvStream,
+    theirs: &Mutex<HashMap<String, i64>>,
+) -> NetResult<()> {
     loop {
         if let SyncMsg::Rows(rows) = read_msg(recv).await? {
             {
@@ -356,7 +409,10 @@ enum PairMsg {
 }
 
 fn spake_start(code: &str) -> (Spake2<Ed25519Group>, Vec<u8>) {
-    Spake2::<Ed25519Group>::start_symmetric(&Password::new(code.as_bytes()), &Identity::new(b"holt-pair-1"))
+    Spake2::<Ed25519Group>::start_symmetric(
+        &Password::new(code.as_bytes()),
+        &Identity::new(b"holt-pair-1"),
+    )
 }
 
 /// Proves knowledge of the shared key, bound to both device ids and the role.
@@ -364,25 +420,37 @@ fn confirm_tag(key: &[u8], role: &[u8], host: &EndpointId, joiner: &EndpointId) 
     let mut k = [0u8; 32];
     k.copy_from_slice(&key[..32]);
     let mut h = blake3::Hasher::new_keyed(&k);
-    h.update(role).update(host.as_bytes()).update(joiner.as_bytes());
+    h.update(role)
+        .update(host.as_bytes())
+        .update(joiner.as_bytes());
     h.finalize().as_bytes().to_vec()
 }
 
 /// The side that showed the code.
 async fn host_pairing(inner: Arc<Inner>, conn: Connection) -> NetResult<()> {
-    let Some(code) = inner.pairing.lock().unwrap().as_ref().map(|p| p.code.clone()) else {
+    let Some(code) = inner
+        .pairing
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|p| p.code.clone())
+    else {
         conn.close(1u32.into(), b"not pairing");
         return Ok(());
     };
     let (host, joiner) = (inner.endpoint.id(), conn.remote_id());
     let (mut send, mut recv) = conn.accept_bi().await?;
 
-    let PairMsg::Spake(theirs) = read_msg(&mut recv).await? else { return Err("expected spake".into()) };
+    let PairMsg::Spake(theirs) = read_msg(&mut recv).await? else {
+        return Err("expected spake".into());
+    };
     let (state, ours) = spake_start(&code);
     write_msg(&mut send, &PairMsg::Spake(ours)).await?;
     let key = state.finish(&theirs).map_err(|e| format!("spake: {e:?}"))?;
 
-    let PairMsg::Confirm(tag) = read_msg(&mut recv).await? else { return Err("expected confirm".into()) };
+    let PairMsg::Confirm(tag) = read_msg(&mut recv).await? else {
+        return Err("expected confirm".into());
+    };
     if tag != confirm_tag(&key, b"joiner", &host, &joiner) {
         write_msg(&mut send, &PairMsg::Rejected).await?;
         send.finish()?;
@@ -399,8 +467,14 @@ async fn host_pairing(inner: Arc<Inner>, conn: Connection) -> NetResult<()> {
         let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
         return Ok(());
     }
-    write_msg(&mut send, &PairMsg::Confirm(confirm_tag(&key, b"host", &host, &joiner))).await?;
-    let PairMsg::Name(name) = read_msg(&mut recv).await? else { return Err("expected name".into()) };
+    write_msg(
+        &mut send,
+        &PairMsg::Confirm(confirm_tag(&key, b"host", &host, &joiner)),
+    )
+    .await?;
+    let PairMsg::Name(name) = read_msg(&mut recv).await? else {
+        return Err("expected name".into());
+    };
     write_msg(&mut send, &PairMsg::Name(inner.name.clone())).await?;
     send.finish()?;
 
@@ -416,26 +490,43 @@ async fn host_pairing(inner: Arc<Inner>, conn: Connection) -> NetResult<()> {
 async fn join_pairing(inner: Arc<Inner>, host: EndpointId, code: String) -> Result<Device> {
     // Transport errors here almost always mean the host stopped pairing or went away.
     let failed = |_: BoxError| HoltError::Pairing(NOT_PAIRING.into());
-    let conn = inner.endpoint.connect(host, PAIR_ALPN).await.map_err(|e| failed(e.into()))?;
+    let conn = inner
+        .endpoint
+        .connect(host, PAIR_ALPN)
+        .await
+        .map_err(|e| failed(e.into()))?;
     let joiner = inner.endpoint.id();
     let (mut send, mut recv) = conn.open_bi().await.map_err(|e| failed(e.into()))?;
 
     let (state, ours) = spake_start(&code);
-    write_msg(&mut send, &PairMsg::Spake(ours)).await.map_err(failed)?;
+    write_msg(&mut send, &PairMsg::Spake(ours))
+        .await
+        .map_err(failed)?;
     let PairMsg::Spake(theirs) = read_msg(&mut recv).await.map_err(failed)? else {
         return Err(HoltError::Pairing(NOT_PAIRING.into()));
     };
-    let key = state.finish(&theirs).map_err(|e| HoltError::Pairing(format!("Pairing failed: {e:?}")))?;
-    write_msg(&mut send, &PairMsg::Confirm(confirm_tag(&key, b"joiner", &host, &joiner))).await.map_err(failed)?;
+    let key = state
+        .finish(&theirs)
+        .map_err(|e| HoltError::Pairing(format!("Pairing failed: {e:?}")))?;
+    write_msg(
+        &mut send,
+        &PairMsg::Confirm(confirm_tag(&key, b"joiner", &host, &joiner)),
+    )
+    .await
+    .map_err(failed)?;
 
     match read_msg(&mut recv).await {
         Ok(PairMsg::Confirm(tag)) if tag == confirm_tag(&key, b"host", &host, &joiner) => {}
         Ok(PairMsg::Rejected) => {
-            return Err(HoltError::Pairing("That code didn't match. Check the code on your other device.".into()));
+            return Err(HoltError::Pairing(
+                "That code didn't match. Check the code on your other device.".into(),
+            ));
         }
         _ => return Err(HoltError::Pairing(NOT_PAIRING.into())),
     }
-    write_msg(&mut send, &PairMsg::Name(inner.name.clone())).await.map_err(failed)?;
+    write_msg(&mut send, &PairMsg::Name(inner.name.clone()))
+        .await
+        .map_err(failed)?;
     let PairMsg::Name(name) = read_msg(&mut recv).await.map_err(failed)? else {
         return Err(HoltError::Pairing(NOT_PAIRING.into()));
     };
@@ -444,7 +535,11 @@ async fn join_pairing(inner: Arc<Inner>, host: EndpointId, code: String) -> Resu
     inner.store.add_peer(&host.to_string(), &name)?;
     inner.nearby.lock().unwrap().remove(&host);
     inner.ensure_dialer(host);
-    Ok(Device { id: host.to_string(), name, online: false })
+    Ok(Device {
+        id: host.to_string(),
+        name,
+        online: false,
+    })
 }
 
 async fn watch_nearby(inner: Arc<Inner>, mdns: MdnsAddressLookup) {
@@ -492,7 +587,9 @@ impl ProtocolHandler for PairHandler {
 
 impl std::fmt::Debug for Inner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Inner").field("id", &self.endpoint.id()).finish()
+        f.debug_struct("Inner")
+            .field("id", &self.endpoint.id())
+            .finish()
     }
 }
 
@@ -524,7 +621,13 @@ mod tests {
     }
 
     fn texts(node: &Node) -> Vec<String> {
-        node.inner.store.search("".into(), 100).unwrap().into_iter().map(|c| c.text).collect()
+        node.inner
+            .store
+            .search("".into(), 100)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.text)
+            .collect()
     }
 
     fn wait_until(what: &str, f: impl Fn() -> bool) {
@@ -551,12 +654,24 @@ mod tests {
 
         let host = b.pair(a.device_id(), code.clone()).unwrap();
         assert_eq!(host.name, "Mac A");
-        assert!(a.inner.pairing.lock().unwrap().is_none(), "pairing stops after success");
-        wait_until("a to list b", || a.devices().unwrap().iter().any(|d| d.name == "Mac B" && d.online));
+        assert!(
+            a.inner.pairing.lock().unwrap().is_none(),
+            "pairing stops after success"
+        );
+        wait_until("a to list b", || {
+            a.devices()
+                .unwrap()
+                .iter()
+                .any(|d| d.name == "Mac B" && d.online)
+        });
 
         a.inner.store.add("from a".into(), None).unwrap();
         wait_until("b to get a's clip", || texts(&b) == ["from a"]);
-        assert_eq!(b.inner.store.take_incoming_copy().as_deref(), Some("from a"));
+        let incoming = b.inner.store.take_incoming_copy().unwrap();
+        assert_eq!(
+            (incoming.text.as_str(), incoming.device.as_str()),
+            ("from a", "Mac A")
+        );
 
         b.inner.store.add("from b".into(), None).unwrap();
         wait_until("a to get b's clip", || texts(&a) == ["from b", "from a"]);
@@ -590,15 +705,25 @@ mod tests {
     #[test]
     #[ignore]
     fn real_network() {
-        let start = |name: &str| Node::start(Store::open(":memory:".into()).unwrap(), name.into()).unwrap();
+        let start =
+            |name: &str| Node::start(Store::open(":memory:".into()).unwrap(), name.into()).unwrap();
         let (a, b) = (start("Mac A"), start("Mac B"));
         let code = a.start_pairing();
-        wait_until("b to see a nearby", || b.nearby().iter().any(|d| d.name == "Mac A"));
+        wait_until("b to see a nearby", || {
+            b.nearby().iter().any(|d| d.name == "Mac A")
+        });
         let host = b.nearby().into_iter().find(|d| d.name == "Mac A").unwrap();
         b.pair(host.id, code).unwrap();
-        wait_until("a and b to connect", || a.devices().unwrap().iter().any(|d| d.online));
-        a.inner.store.add("over the real network".into(), None).unwrap();
-        wait_until("b to get the clip", || texts(&b) == ["over the real network"]);
+        wait_until("a and b to connect", || {
+            a.devices().unwrap().iter().any(|d| d.online)
+        });
+        a.inner
+            .store
+            .add("over the real network".into(), None)
+            .unwrap();
+        wait_until("b to get the clip", || {
+            texts(&b) == ["over the real network"]
+        });
     }
 
     #[test]

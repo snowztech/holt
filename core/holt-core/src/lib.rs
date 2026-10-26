@@ -34,6 +34,15 @@ pub struct Clip {
     /// Unix time in milliseconds of the last copy.
     pub created_at: i64,
     pub pinned: bool,
+    /// Name of the device it was copied on, if that's not this one.
+    pub device: Option<String>,
+}
+
+/// A clip that just arrived from another device.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IncomingCopy {
+    pub text: String,
+    pub device: String,
 }
 
 #[derive(Debug, uniffi::Error)]
@@ -83,6 +92,11 @@ pub(crate) struct Row {
     pub deleted: bool,
     pub origin: String,
     pub seq: i64,
+    /// Id and name of the device the clip was last copied on.
+    #[serde(default)]
+    pub copied_by: Option<String>,
+    #[serde(default)]
+    pub copied_on: Option<String>,
 }
 
 #[derive(uniffi::Object)]
@@ -90,8 +104,9 @@ pub struct Store {
     conn: Mutex<Connection>,
     secret_key: [u8; 32],
     device_id: String,
+    device_name: Mutex<Option<String>>,
     changes: watch::Sender<u64>,
-    incoming_copy: Mutex<Option<String>>,
+    incoming_copy: Mutex<Option<IncomingCopy>>,
 }
 
 #[uniffi::export]
@@ -102,11 +117,14 @@ impl Store {
         let mut conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         let secret_key = migrate(&mut conn)?;
-        let device_id = iroh::SecretKey::from_bytes(&secret_key).public().to_string();
+        let device_id = iroh::SecretKey::from_bytes(&secret_key)
+            .public()
+            .to_string();
         Ok(Arc::new(Store {
             conn: Mutex::new(conn),
             secret_key,
             device_id,
+            device_name: Mutex::new(None),
             changes: watch::channel(0).0,
             incoming_copy: Mutex::new(None),
         }))
@@ -123,21 +141,26 @@ impl Store {
         if text.trim().is_empty() || text.len() > MAX_CLIP_BYTES {
             return Ok(None);
         }
+        let name = self.device_name.lock().unwrap().clone();
         let clip = self.write(|tx, now, seq| {
             Ok(tx.query_row(
-                "INSERT INTO clips (key, text, kind, source_app, created_at, updated_at, origin, seq)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7)
-                 ON CONFLICT(key) DO UPDATE SET
-                     text = excluded.text,
-                     source_app = excluded.source_app,
-                     created_at = excluded.created_at,
-                     updated_at = max(excluded.updated_at, clips.updated_at + 1),
-                     deleted = 0,
-                     origin = excluded.origin,
-                     seq = excluded.seq
-                 RETURNING id, kind, text, source_app, created_at, pinned",
-                params![key_of(&text), text, kind_of(&text) as i64, source_app, now, self.device_id, seq],
-                clip_from_row,
+                &format!(
+                    "INSERT INTO clips (key, text, kind, source_app, created_at, updated_at, origin, seq, copied_by, copied_on)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?6, ?8)
+                     ON CONFLICT(key) DO UPDATE SET
+                         text = excluded.text,
+                         source_app = excluded.source_app,
+                         created_at = excluded.created_at,
+                         updated_at = max(excluded.updated_at, clips.updated_at + 1),
+                         deleted = 0,
+                         origin = excluded.origin,
+                         seq = excluded.seq,
+                         copied_by = excluded.copied_by,
+                         copied_on = excluded.copied_on
+                     RETURNING {CLIP_COLUMNS}"
+                ),
+                params![key_of(&text), text, kind_of(&text) as i64, source_app, now, self.device_id, seq, name],
+                |r| self.clip_from_row(r),
             )?)
         })?;
         Ok(Some(clip))
@@ -153,17 +176,17 @@ impl Store {
             .split_whitespace()
             .map(|w| format!("%{}%", escape_like(w)))
             .collect();
-        let mut sql = String::from(
-            "SELECT id, kind, text, source_app, created_at, pinned FROM clips WHERE deleted = 0",
-        );
+        let mut sql = format!("SELECT {CLIP_COLUMNS} FROM clips WHERE deleted = 0");
         for _ in &words {
             sql.push_str(" AND text LIKE ? ESCAPE '\\'");
         }
-        sql.push_str(&format!(" ORDER BY pinned DESC, created_at DESC LIMIT {limit}"));
+        sql.push_str(&format!(
+            " ORDER BY pinned DESC, created_at DESC LIMIT {limit}"
+        ));
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(params_from_iter(words.iter()), clip_from_row)?;
+        let rows = stmt.query_map(params_from_iter(words.iter()), |r| self.clip_from_row(r))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
@@ -188,7 +211,9 @@ impl Store {
         let ids: Vec<i64> = {
             let conn = self.conn.lock().unwrap();
             let mut stmt = conn.prepare("SELECT id FROM clips WHERE pinned = 0 AND deleted = 0")?;
-            let ids = stmt.query_map([], |r| r.get(0))?.collect::<std::result::Result<_, _>>()?;
+            let ids = stmt
+                .query_map([], |r| r.get(0))?
+                .collect::<std::result::Result<_, _>>()?;
             ids
         };
         for id in ids {
@@ -219,7 +244,7 @@ impl Store {
 
     /// The newest clip that just arrived from another device, if there is one
     /// the app hasn't taken yet. The app puts it on the clipboard.
-    pub fn take_incoming_copy(&self) -> Option<String> {
+    pub fn take_incoming_copy(&self) -> Option<IncomingCopy> {
         self.incoming_copy.lock().unwrap().take()
     }
 }
@@ -228,6 +253,32 @@ impl Store {
 impl Store {
     pub(crate) fn secret_key(&self) -> [u8; 32] {
         self.secret_key
+    }
+
+    pub(crate) fn set_device_name(&self, name: &str) {
+        *self.device_name.lock().unwrap() = Some(name.to_string());
+    }
+
+    fn clip_from_row(&self, row: &rusqlite::Row) -> rusqlite::Result<Clip> {
+        let copied_by: Option<String> = row.get(6)?;
+        let device = if copied_by.as_deref().is_some_and(|id| id != self.device_id) {
+            row.get(7)?
+        } else {
+            None
+        };
+        Ok(Clip {
+            id: row.get(0)?,
+            kind: if row.get::<_, i64>(1)? == ClipKind::Link as i64 {
+                ClipKind::Link
+            } else {
+                ClipKind::Text
+            },
+            text: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+            source_app: row.get(3)?,
+            created_at: row.get(4)?,
+            pinned: row.get(5)?,
+            device,
+        })
     }
 
     pub(crate) fn subscribe(&self) -> watch::Receiver<u64> {
@@ -252,7 +303,7 @@ impl Store {
     pub(crate) fn rows_since(&self, origin: &str, after: i64, limit: u32) -> Result<Vec<Row>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq
+            "SELECT key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq, copied_by, copied_on
              FROM clips WHERE origin = ?1 AND seq > ?2 ORDER BY seq LIMIT ?3",
         )?;
         let rows = stmt.query_map(params![origin, after, limit], |r| {
@@ -267,6 +318,8 @@ impl Store {
                 deleted: r.get(7)?,
                 origin: r.get(8)?,
                 seq: r.get(9)?,
+                copied_by: r.get(10)?,
+                copied_on: r.get(11)?,
             })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
@@ -278,7 +331,7 @@ impl Store {
     pub(crate) fn apply(&self, rows: Vec<Row>) -> Result<()> {
         let now = now_ms();
         let mut changed = false;
-        let mut live_copy: Option<(i64, String)> = None;
+        let mut live_copy: Option<(i64, IncomingCopy)> = None;
         {
             let mut conn = self.conn.lock().unwrap();
             let tx = conn.transaction()?;
@@ -297,7 +350,9 @@ impl Store {
                     params![row.origin, row.seq],
                 )?;
                 // A live clip's key must match its text, or dedupe breaks.
-                if !row.deleted && row.text.as_deref().map(key_of).as_deref() != Some(row.key.as_str()) {
+                if !row.deleted
+                    && row.text.as_deref().map(key_of).as_deref() != Some(row.key.as_str())
+                {
                     continue;
                 }
                 let current: Option<(i64, String)> = tx
@@ -313,31 +368,41 @@ impl Store {
                     }
                 }
                 tx.execute(
-                    "INSERT INTO clips (key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                    "INSERT INTO clips (key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq, copied_by, copied_on)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                      ON CONFLICT(key) DO UPDATE SET
                          text = excluded.text, kind = excluded.kind, source_app = excluded.source_app,
                          created_at = excluded.created_at, updated_at = excluded.updated_at,
                          pinned = excluded.pinned, deleted = excluded.deleted,
-                         origin = excluded.origin, seq = excluded.seq",
+                         origin = excluded.origin, seq = excluded.seq,
+                         copied_by = excluded.copied_by, copied_on = excluded.copied_on",
                     params![
-                        row.key, row.text, row.kind, row.source_app, row.created_at,
-                        row.updated_at, row.pinned, row.deleted, row.origin, row.seq
+                        row.key, row.text, row.kind, row.source_app, row.created_at, row.updated_at,
+                        row.pinned, row.deleted, row.origin, row.seq, row.copied_by, row.copied_on
                     ],
                 )?;
                 changed = true;
                 let is_new_copy = !row.deleted
                     && row.created_at > newest_before
                     && row.created_at > now - LIVE_COPY_WINDOW_MS
-                    && live_copy.as_ref().is_none_or(|(at, _)| row.created_at > *at);
+                    && live_copy
+                        .as_ref()
+                        .is_none_or(|(at, _)| row.created_at > *at);
                 if is_new_copy {
-                    live_copy = Some((row.created_at, row.text.clone().unwrap_or_default()));
+                    let copy = IncomingCopy {
+                        text: row.text.clone().unwrap_or_default(),
+                        device: row
+                            .copied_on
+                            .clone()
+                            .unwrap_or_else(|| "another device".into()),
+                    };
+                    live_copy = Some((row.created_at, copy));
                 }
             }
             tx.commit()?;
         }
-        if let Some((_, text)) = live_copy {
-            *self.incoming_copy.lock().unwrap() = Some(text);
+        if let Some((_, copy)) = live_copy {
+            *self.incoming_copy.lock().unwrap() = Some(copy);
         }
         if changed {
             self.changes.send_modify(|v| *v += 1);
@@ -411,12 +476,18 @@ fn migrate(conn: &mut Connection) -> Result<[u8; 32]> {
     let tx = conn.transaction()?;
     if version < 1 {
         let had_v0: bool = tx
-            .query_row("SELECT 1 FROM sqlite_master WHERE name = 'clips'", [], |_| Ok(()))
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE name = 'clips'",
+                [],
+                |_| Ok(()),
+            )
             .optional()?
             .is_some();
         if had_v0 {
             // The old index moves with the renamed table and would clash with the new one.
-            tx.execute_batch("ALTER TABLE clips RENAME TO clips_v0; DROP INDEX IF EXISTS clips_created;")?;
+            tx.execute_batch(
+                "ALTER TABLE clips RENAME TO clips_v0; DROP INDEX IF EXISTS clips_created;",
+            )?;
         }
         tx.execute_batch(
             "CREATE TABLE clips (
@@ -450,7 +521,9 @@ fn migrate(conn: &mut Connection) -> Result<[u8; 32]> {
                 let mut stmt = tx.prepare(
                     "SELECT text, kind, source_app, created_at, pinned FROM clips_v0 ORDER BY created_at",
                 )?;
-                let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
+                let rows = stmt.query_map([], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+                })?;
                 rows.collect::<std::result::Result<_, _>>()?
             };
             for (seq, (text, kind, source_app, created_at, pinned)) in (1i64..).zip(old) {
@@ -465,7 +538,16 @@ fn migrate(conn: &mut Connection) -> Result<[u8; 32]> {
         }
         tx.execute_batch("PRAGMA user_version = 1;")?;
     }
-    let hex: String = tx.query_row("SELECT value FROM meta WHERE key = 'secret_key'", [], |r| r.get(0))?;
+    if version < 2 {
+        tx.execute_batch(
+            "ALTER TABLE clips ADD COLUMN copied_by TEXT;
+             ALTER TABLE clips ADD COLUMN copied_on TEXT;
+             PRAGMA user_version = 2;",
+        )?;
+    }
+    let hex: String = tx.query_row("SELECT value FROM meta WHERE key = 'secret_key'", [], |r| {
+        r.get(0)
+    })?;
     tx.commit()?;
     from_hex(&hex).ok_or_else(|| HoltError::Db("corrupt device key".into()))
 }
@@ -476,8 +558,8 @@ fn key_of(text: &str) -> String {
 
 fn kind_of(text: &str) -> ClipKind {
     let t = text.trim();
-    let is_url = (t.starts_with("https://") || t.starts_with("http://"))
-        && !t.contains(char::is_whitespace);
+    let is_url =
+        (t.starts_with("https://") || t.starts_with("http://")) && !t.contains(char::is_whitespace);
     if is_url {
         ClipKind::Link
     } else {
@@ -486,23 +568,12 @@ fn kind_of(text: &str) -> ClipKind {
 }
 
 fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
-fn clip_from_row(row: &rusqlite::Row) -> rusqlite::Result<Clip> {
-    Ok(Clip {
-        id: row.get(0)?,
-        kind: if row.get::<_, i64>(1)? == ClipKind::Link as i64 {
-            ClipKind::Link
-        } else {
-            ClipKind::Text
-        },
-        text: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-        source_app: row.get(3)?,
-        created_at: row.get(4)?,
-        pinned: row.get(5)?,
-    })
-}
+const CLIP_COLUMNS: &str = "id, kind, text, source_app, created_at, pinned, copied_by, copied_on";
 
 fn to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -520,7 +591,10 @@ fn from_hex(hex: &str) -> Option<[u8; 32]> {
 }
 
 pub(crate) fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
 }
 
 #[cfg(test)]
@@ -536,7 +610,11 @@ mod tests {
     }
 
     fn all(s: &Store) -> Vec<String> {
-        s.search("".into(), 100).unwrap().into_iter().map(|c| c.text).collect()
+        s.search("".into(), 100)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.text)
+            .collect()
     }
 
     /// Copies everything `from` has that `to` lacks, the way a sync session does.
@@ -544,7 +622,8 @@ mod tests {
         let cursors = to.cursors().unwrap();
         for origin in from.origins().unwrap() {
             let after = cursors.get(&origin).copied().unwrap_or(0);
-            to.apply(from.rows_since(&origin, after, 1000).unwrap()).unwrap();
+            to.apply(from.rows_since(&origin, after, 1000).unwrap())
+                .unwrap();
         }
     }
 
@@ -559,7 +638,10 @@ mod tests {
         tick();
         s.add("two".into(), None).unwrap();
         tick();
-        let again = s.add("one".into(), Some("com.apple.Safari".into())).unwrap().unwrap();
+        let again = s
+            .add("one".into(), Some("com.apple.Safari".into()))
+            .unwrap()
+            .unwrap();
 
         assert_eq!(again.id, first.id);
         assert_eq!(again.source_app.as_deref(), Some("com.apple.Safari"));
@@ -570,15 +652,24 @@ mod tests {
     fn skips_blank_and_huge_text() {
         let s = store();
         assert!(s.add("  \n".into(), None).unwrap().is_none());
-        assert!(s.add("x".repeat(MAX_CLIP_BYTES + 1), None).unwrap().is_none());
+        assert!(s
+            .add("x".repeat(MAX_CLIP_BYTES + 1), None)
+            .unwrap()
+            .is_none());
         assert!(s.search("".into(), 10).unwrap().is_empty());
     }
 
     #[test]
     fn detects_links() {
         let s = store();
-        let link = s.add(" https://github.com/holt-app ".into(), None).unwrap().unwrap();
-        let text = s.add("see https://github.com".into(), None).unwrap().unwrap();
+        let link = s
+            .add(" https://github.com/holt-app ".into(), None)
+            .unwrap()
+            .unwrap();
+        let text = s
+            .add("see https://github.com".into(), None)
+            .unwrap()
+            .unwrap();
         assert_eq!(link.kind, ClipKind::Link);
         assert_eq!(text.kind, ClipKind::Text);
     }
@@ -590,10 +681,19 @@ mod tests {
         s.add("Invoice #2031".into(), None).unwrap();
         s.add("100% done_now".into(), None).unwrap();
 
-        assert_eq!(texts(&s.search("0.0 SSH".into(), 10).unwrap()), ["ssh deploy@10.0.0.4 -p 2222"]);
-        assert_eq!(texts(&s.search("invoice".into(), 10).unwrap()), ["Invoice #2031"]);
+        assert_eq!(
+            texts(&s.search("0.0 SSH".into(), 10).unwrap()),
+            ["ssh deploy@10.0.0.4 -p 2222"]
+        );
+        assert_eq!(
+            texts(&s.search("invoice".into(), 10).unwrap()),
+            ["Invoice #2031"]
+        );
         // % and _ are literal, not wildcards.
-        assert_eq!(texts(&s.search("0%".into(), 10).unwrap()), ["100% done_now"]);
+        assert_eq!(
+            texts(&s.search("0%".into(), 10).unwrap()),
+            ["100% done_now"]
+        );
         assert!(s.search("e_p".into(), 10).unwrap().is_empty());
     }
 
@@ -608,7 +708,10 @@ mod tests {
         }
 
         assert_eq!(s.prune(30, 2).unwrap(), 3);
-        assert_eq!(texts(&s.search("".into(), 10).unwrap()), ["pinned", "clip 4", "clip 3"]);
+        assert_eq!(
+            texts(&s.search("".into(), 10).unwrap()),
+            ["pinned", "clip 4", "clip 3"]
+        );
 
         s.clear().unwrap();
         assert_eq!(texts(&s.search("".into(), 10).unwrap()), ["pinned"]);
@@ -620,7 +723,10 @@ mod tests {
         a.add("hello".into(), None).unwrap();
         sync(&a, &b);
         assert_eq!(all(&b), ["hello"]);
-        assert_eq!(b.take_incoming_copy().as_deref(), Some("hello"));
+        assert_eq!(
+            b.take_incoming_copy().map(|c| c.text).as_deref(),
+            Some("hello")
+        );
         assert_eq!(b.take_incoming_copy(), None);
 
         let on_b = b.search("hello".into(), 1).unwrap().remove(0);
@@ -642,17 +748,44 @@ mod tests {
     }
 
     #[test]
+    fn clips_say_which_device_they_came_from() {
+        let (a, b) = (store(), store());
+        a.set_device_name("MacBook Pro");
+        b.set_device_name("Mac mini");
+        a.add("hi".into(), None).unwrap();
+        assert_eq!(a.search("".into(), 1).unwrap()[0].device, None);
+        sync(&a, &b);
+        assert_eq!(
+            b.search("".into(), 1).unwrap()[0].device.as_deref(),
+            Some("MacBook Pro")
+        );
+        assert_eq!(
+            b.take_incoming_copy().map(|c| c.device).as_deref(),
+            Some("MacBook Pro")
+        );
+        // Pinning on b doesn't change where it was copied.
+        let id = b.search("".into(), 1).unwrap()[0].id;
+        b.set_pinned(id, true).unwrap();
+        sync(&b, &a);
+        assert_eq!(a.search("".into(), 1).unwrap()[0].device, None);
+    }
+
+    #[test]
     fn same_text_on_two_devices_is_one_clip() {
         let (a, b) = (store(), store());
         a.add("same".into(), None).unwrap();
         tick();
-        b.add("same".into(), Some("com.apple.Notes".into())).unwrap();
+        b.add("same".into(), Some("com.apple.Notes".into()))
+            .unwrap();
         sync(&a, &b);
         sync(&b, &a);
         assert_eq!(all(&a), ["same"]);
         assert_eq!(all(&b), ["same"]);
         // b's copy is newer, so both keep it.
-        assert_eq!(a.search("".into(), 1).unwrap()[0].source_app.as_deref(), Some("com.apple.Notes"));
+        assert_eq!(
+            a.search("".into(), 1).unwrap()[0].source_app.as_deref(),
+            Some("com.apple.Notes")
+        );
     }
 
     #[test]
@@ -696,7 +829,12 @@ mod tests {
         // The device key survives reopening.
         let id = s.device_id();
         drop(s);
-        assert_eq!(Store::open(path.to_string_lossy().into()).unwrap().device_id(), id);
+        assert_eq!(
+            Store::open(path.to_string_lossy().into())
+                .unwrap()
+                .device_id(),
+            id
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
