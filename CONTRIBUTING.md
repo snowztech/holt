@@ -73,7 +73,11 @@ The app shares `HoltBrand` (Skip and the colors) with the Mac app. Its share she
 For a stand-in Mac, run `cd core && cargo run --release --example peer`. Launch arguments help with testing:
 
 - `-HoltPairLink "holt://pair?id=…&code=…"` pairs as if the Camera opened the Mac's QR code
-- `-HoltOpen pair` or `-HoltOpen settings` opens that sheet
+- `-HoltOpen pair`, `settings` or `sendfaster` opens that screen
+
+For App Store screenshots, the peer can pose as a Mac with demo clips: `HOLT_PEER_NAME` names it, `HOLT_PEER_CLIPS` is a file of clips separated by `---` lines (`#pin` on a clip's first line pins it), and `HOLT_PEER_GAP` spaces them out in seconds. The screenshots live in `apple/ios/AppStore/screenshots/`.
+
+`make testflight` archives the app and uploads it to TestFlight. It reads an App Store Connect API key from `ASC_KEY_PATH`, `ASC_KEY_ID` and `ASC_ISSUER_ID`, so nothing secret is in the repo.
 
 `docs/ios-spike.md` has what we measured and what's still to test on a real iPhone.
 

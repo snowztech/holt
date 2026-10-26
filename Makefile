@@ -5,7 +5,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 # Ad-hoc signing ("-") works too, but macOS forgets the grant on every build.
 SIGN_ID ?= $(shell security find-identity -p codesigning -v | grep -m1 "Apple Development" | sed -E 's/.*"(.*)"/\1/')
 
-.PHONY: core core-ios bindings mac ios icon run test lint fmt dist clean
+.PHONY: core core-ios bindings mac ios testflight icon run test lint fmt dist clean
 
 # The Mac slice only, so Mac work stays fast. `make core-ios` adds iPhone and Simulator.
 core:
@@ -64,6 +64,10 @@ ios: core-ios
 	cd apple/ios && xcodegen generate --quiet
 	xcodebuild -project apple/ios/Holt.xcodeproj -scheme Holt -destination 'generic/platform=iOS Simulator' \
 		-derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO -quiet build
+
+# Archive the iPhone app and upload it to TestFlight. Reads the API key from the environment.
+testflight:
+	scripts/testflight.sh
 
 run: mac
 	-pkill -x Holt
