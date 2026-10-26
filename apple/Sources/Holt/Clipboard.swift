@@ -13,11 +13,14 @@ final class ClipboardWatcher {
     ]
 
     private let onCopy: (String, String?) -> Void
+    private let incoming: () -> String?
     private var lastChange = NSPasteboard.general.changeCount
     private var timer: Timer?
 
-    init(onCopy: @escaping (_ text: String, _ sourceApp: String?) -> Void) {
+    /// `incoming` returns a clip from another device to put on the clipboard.
+    init(onCopy: @escaping (_ text: String, _ sourceApp: String?) -> Void, incoming: @escaping () -> String?) {
         self.onCopy = onCopy
+        self.incoming = incoming
     }
 
     func start() {
@@ -26,12 +29,19 @@ final class ClipboardWatcher {
         }
     }
 
-    /// Call right after Holt writes to the clipboard itself.
-    func ignoreCurrentChange() {
-        lastChange = NSPasteboard.general.changeCount
+    /// Puts text on the clipboard without recording it as a new copy.
+    func put(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        lastChange = pasteboard.changeCount
     }
 
     private func check() {
+        if let text = incoming() {
+            put(text)
+            return
+        }
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount != lastChange else { return }
         lastChange = pasteboard.changeCount

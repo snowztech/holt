@@ -415,7 +415,8 @@ fn migrate(conn: &mut Connection) -> Result<[u8; 32]> {
             .optional()?
             .is_some();
         if had_v0 {
-            tx.execute_batch("ALTER TABLE clips RENAME TO clips_v0;")?;
+            // The old index moves with the renamed table and would clash with the new one.
+            tx.execute_batch("ALTER TABLE clips RENAME TO clips_v0; DROP INDEX IF EXISTS clips_created;")?;
         }
         tx.execute_batch(
             "CREATE TABLE clips (
@@ -683,6 +684,7 @@ mod tests {
             conn.execute_batch(
                 "CREATE TABLE clips (id INTEGER PRIMARY KEY, kind INTEGER NOT NULL, text TEXT NOT NULL UNIQUE,
                      source_app TEXT, created_at INTEGER NOT NULL, pinned INTEGER NOT NULL DEFAULT 0);
+                 CREATE INDEX clips_created ON clips(created_at);
                  INSERT INTO clips (kind, text, created_at, pinned) VALUES (0, 'old', 1, 1), (1, 'https://x.dev', 2, 0);",
             )
             .unwrap();

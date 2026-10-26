@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import HoltCore
+import SystemConfiguration
 
 @main
 enum Main {
@@ -22,6 +23,9 @@ enum Main {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: Store!
+    /// Nil if networking failed to start. History still works without it.
+    private var node: Node?
+    private var devicesWindow: DevicesWindow?
     private var watcher: ClipboardWatcher!
     private var popup: PopupController!
     private var hotKey: HotKey!
@@ -40,10 +44,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         _ = try? store.prune(maxAgeDays: 30, maxUnpinned: 5000)
-
-        watcher = ClipboardWatcher { [weak self] text, app in
-            _ = try? self?.store.add(text: text, sourceApp: app)
+        do {
+            node = try Node.start(store: store, deviceName: Self.computerName())
+        } catch {
+            NSLog("Holt: sync is off: \(error)")
         }
+
+        watcher = ClipboardWatcher(
+            onCopy: { [weak self] text, app in _ = try? self?.store.add(text: text, sourceApp: app) },
+            incoming: { [weak self] in self?.store.takeIncomingCopy() }
+        )
         watcher.start()
 
         popup = PopupController(store: store) { [weak self] clip in self?.paste(clip) }
@@ -85,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let open = NSMenuItem(title: "Open Holt", action: #selector(openPopup), keyEquivalent: "v")
         open.keyEquivalentModifierMask = [.command, .shift]
         menu.addItem(open)
+        let devices = NSMenuItem(title: "Devices…", action: #selector(openDevices), keyEquivalent: "")
+        devices.isEnabled = node != nil
+        menu.addItem(devices)
         menu.addItem(NSMenuItem(title: "Clipboard Access…", action: #selector(askForClipboardAccess), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Enable Auto-Paste…", action: #selector(askForAccessibility), keyEquivalent: ""))
         menu.addItem(.separator())
@@ -97,6 +110,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openPopup() { popup.show() }
+
+    @objc private func openDevices() {
+        guard let node else { return }
+        if devicesWindow == nil { devicesWindow = DevicesWindow(node: node) }
+        devicesWindow?.show()
+    }
 
     @objc private func askForAccessibility() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
@@ -117,12 +136,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func paste(_ clip: Clip) {
         popup.close()
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(clip.text, forType: .string)
         // Record it ourselves so it moves to the top with its original source app,
         // instead of the watcher crediting whichever app is in front.
-        watcher.ignoreCurrentChange()
+        watcher.put(clip.text)
         _ = try? store.add(text: clip.text, sourceApp: clip.sourceApp)
 
         // Without Accessibility access the clip is still on the clipboard,
@@ -137,6 +153,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The popup never activates Holt, so the app the user was in is still
         // frontmost and receives the keystroke.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { sendPasteKeystroke() }
+    }
+
+    /// The name set in System Settings → General → Sharing, like "Lucas's MacBook Pro".
+    private static func computerName() -> String {
+        (SCDynamicStoreCopyComputerName(nil, nil) as String?) ?? Host.current().localizedName ?? "Mac"
     }
 
     private static func databasePath() -> String {

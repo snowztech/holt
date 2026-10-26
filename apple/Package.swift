@@ -11,7 +11,12 @@ let package = Package(
         .executableTarget(
             name: "Holt",
             dependencies: ["HoltCore"],
-            linkerSettings: [.linkedFramework("Carbon")]
+            linkerSettings: [
+                .linkedFramework("Carbon"),
+                // Used by iroh inside the Rust core.
+                .linkedFramework("SystemConfiguration"),
+                .linkedFramework("Security"),
+            ]
         ),
     ],
     swiftLanguageModes: [.v5]

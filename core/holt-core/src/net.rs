@@ -584,6 +584,23 @@ mod tests {
         assert!(texts(&b).is_empty());
     }
 
+    /// Same flow as the Mac app: find the other device over mDNS, pair, sync.
+    /// Uses the real network, so it's skipped by default.
+    /// Run with `cargo test -- --ignored real_network`.
+    #[test]
+    #[ignore]
+    fn real_network() {
+        let start = |name: &str| Node::start(Store::open(":memory:".into()).unwrap(), name.into()).unwrap();
+        let (a, b) = (start("Mac A"), start("Mac B"));
+        let code = a.start_pairing();
+        wait_until("b to see a nearby", || b.nearby().iter().any(|d| d.name == "Mac A"));
+        let host = b.nearby().into_iter().find(|d| d.name == "Mac A").unwrap();
+        b.pair(host.id, code).unwrap();
+        wait_until("a and b to connect", || a.devices().unwrap().iter().any(|d| d.online));
+        a.inner.store.add("over the real network".into(), None).unwrap();
+        wait_until("b to get the clip", || texts(&b) == ["over the real network"]);
+    }
+
     #[test]
     fn too_many_wrong_codes_stop_pairing() {
         let (a, b) = (node("Mac A"), node("Mac B"));
