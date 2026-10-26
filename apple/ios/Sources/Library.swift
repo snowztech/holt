@@ -42,8 +42,11 @@ final class Library {
     }
 
     func refresh() {
-        clips = (try? Core.shared.store.search(query: query, limit: 300)) ?? []
-        devices = (try? Core.shared.node?.devices()) ?? []
+        // Assigning, even the same value, redraws every view that reads it. This runs every second.
+        let clips = (try? Core.shared.store.search(query: query, limit: 300)) ?? []
+        if clips != self.clips { self.clips = clips }
+        let devices = (try? Core.shared.node?.devices()) ?? []
+        if devices != self.devices { self.devices = devices }
         for clip in clips where clip.device != nil && arrived.insert(clip.id).inserted {
             let delay = Int64(Date().timeIntervalSince1970 * 1000) - clip.createdAt
             if delay < 10_000 { Core.log("received a clip from \(clip.device!), \(delay) ms after it was copied") }

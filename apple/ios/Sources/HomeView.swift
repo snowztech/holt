@@ -31,11 +31,11 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView(library: library) }
             .sheet(isPresented: $showPair) { PairView(library: library, link: pairing) }
-            // For development: `-HoltOpen pair` opens the pairing sheet, `-HoltOpen settings` Settings.
+            // For development and screenshots: `-HoltOpen pair`, `settings` or `sendfaster`.
             .task {
                 switch UserDefaults.standard.string(forKey: "HoltOpen") {
                 case "pair": showPair = true
-                case "settings": showSettings = true
+                case "settings", "sendfaster": showSettings = true
                 default: break
                 }
             }
@@ -202,9 +202,10 @@ private struct LatestClip: View {
     var body: some View {
         Button(action: copy) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
+                let text = preview(clip)
+                Text(text)
                     .font(
-                        .system(clip.text.count > 80 ? .body : .title3, design: clip.text.contains("\n") ? .monospaced : .default)
+                        .system(text.count > 80 ? .body : .title3, design: text.contains("\n") ? .monospaced : .default)
                             .weight(.medium)
                     )
                     .foregroundStyle(.primary)
@@ -212,7 +213,7 @@ private struct LatestClip: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack {
-                    Text(source(clip, showSource).map { "\($0), \(age(clip).lowercased())" } ?? age(clip))
+                    Age(clip: clip, source: source(clip, showSource))
                         .font(.footnote).foregroundStyle(.secondary)
                     Spacer()
                     HStack(spacing: 5) {
@@ -242,7 +243,7 @@ private struct ClipRow: View {
                 } else if clip.kind == .link {
                     Image(systemName: "link").font(.footnote).foregroundStyle(Brand.river)
                 }
-                Text(clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
+                Text(preview(clip))
                     .lineLimit(2)
             }
             HStack {
@@ -250,7 +251,7 @@ private struct ClipRow: View {
                     Text(source)
                     Spacer()
                 }
-                Text(age(clip))
+                Age(clip: clip)
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -291,6 +292,23 @@ private struct SendBar: View {
 /// clips from this iPhone say so.
 private func source(_ clip: Clip, _ showDevice: Bool) -> String? {
     clip.device == nil ? "This iPhone" : showDevice ? clip.device : nil
+}
+
+/// The start of a clip, enough for a few lines, and cheap to render even when the clip is a whole log file.
+private func preview(_ clip: Clip) -> String {
+    String(clip.text.prefix(500)).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// "Just now", "5 min. ago". Updates on its own, since the list only redraws when clips change.
+private struct Age: View {
+    let clip: Clip
+    var source: String?
+
+    var body: some View {
+        TimelineView(.everyMinute) { _ in
+            Text(source.map { "\($0), \(age(clip).lowercased())" } ?? age(clip))
+        }
+    }
 }
 
 private func age(_ clip: Clip) -> String {
