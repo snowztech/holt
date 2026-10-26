@@ -1,5 +1,5 @@
-# The iPhone app. `make ios` generates Holt.xcodeproj from this file, so the
-# project itself is never committed and never conflicts.
+# The iPhone app and its extensions. `make ios` generates Holt.xcodeproj from this file,
+# so the project itself is never committed and never conflicts.
 name: Holt
 options:
   bundleIdPrefix: app.holtclip
@@ -12,19 +12,37 @@ settings:
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-targets:
-  Holt:
-    type: application
-    platform: iOS
+    # The core is built for Apple Silicon only, like the Mac release.
+    EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
+
+# Everything the app and both extensions need: the core and the shared code.
+targetTemplates:
+  HoltCore:
     sources:
-      - path: Sources
-      # The generated bindings, compiled into the app instead of a separate module.
+      - path: Shared
+      # The generated bindings, compiled into each target instead of a separate module.
       - path: ../Sources/HoltCore
     dependencies:
       - framework: ../HoltCoreFFI.xcframework
         embed: false
       - sdk: SystemConfiguration.framework
       - sdk: Security.framework
+    entitlements:
+      path: ${target_name}.entitlements
+      properties:
+        # The app and its extensions share one history and one pairing.
+        com.apple.security.application-groups: [group.app.holtclip.Holt]
+
+targets:
+  Holt:
+    type: application
+    platform: iOS
+    templates: [HoltCore]
+    sources:
+      - path: Sources
+    dependencies:
+      - target: HoltShare
+      - target: HoltControls
     info:
       path: Info.plist
       properties:
@@ -36,5 +54,46 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.holtclip.Holt
         TARGETED_DEVICE_FAMILY: "1"
-        # The core is built for Apple Silicon only, like the Mac release.
-        EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
+
+  # Share → Holt from any app.
+  HoltShare:
+    type: app-extension
+    platform: iOS
+    templates: [HoltCore]
+    sources:
+      - path: Share
+    info:
+      path: Share/Info.plist
+      properties:
+        CFBundleDisplayName: Holt
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.holtclip.Holt.share
+
+  # The Control Center and lock screen button. Controls need iOS 18.
+  HoltControls:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    templates: [HoltCore]
+    sources:
+      - path: Controls
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: Controls/Info.plist
+      properties:
+        CFBundleDisplayName: Holt
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.holtclip.Holt.controls
