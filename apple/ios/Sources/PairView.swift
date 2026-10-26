@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Two ways to pair: the QR code on the Mac, which the Camera opens here, or picking a
-/// nearby Mac and typing its 6-digit code.
+/// Pairing: scan the QR code in Holt on the Mac, or pick a nearby Mac and type its code.
 struct PairView: View {
     let library: Library
     /// Set when the Camera opened a pairing link, so pairing starts right away.
@@ -9,10 +8,8 @@ struct PairView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var nearby = Nearby()
-    @State private var chosen: Nearby.Mac?
-    @State private var code = ""
+    @State private var scanning = false
     @State private var state = PairState.ready
-    @FocusState private var codeFocused: Bool
 
     enum PairState: Equatable {
         case ready
@@ -26,101 +23,183 @@ struct PairView: View {
             Group {
                 switch state {
                 case .pairing:
-                    VStack(spacing: 16) {
-                        ProgressView().controlSize(.large)
-                        Text("Pairing…").font(.title3.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    PairingProgress()
                 case .paired(let name):
-                    paired(name)
+                    Paired(name: name) { dismiss() }
                 case .ready, .failed:
-                    ways
+                    options
                 }
             }
-            .navigationTitle("Pair with your Mac")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
-            .task {
-                if let link {
+            .sheet(isPresented: $scanning) {
+                QRScanner { link in
+                    scanning = false
                     start(link)
-                } else {
-                    nearby.start()
                 }
+                .ignoresSafeArea()
+            }
+            .task {
+                if let link { start(link) } else { nearby.start() }
             }
             .onDisappear { nearby.stop() }
         }
     }
 
-    private var ways: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 36) {
-                way(
-                    symbol: "qrcode.viewfinder", title: "Scan the code",
-                    detail:
-                        "On your Mac, open Holt → Settings → Devices. Point this iPhone's Camera at the code, then tap Open in Holt."
-                )
-
-                VStack(alignment: .leading, spacing: 16) {
-                    way(symbol: "number", title: "Or type it", detail: "Pick your Mac, then type the 6-digit code it shows.")
-                    if nearby.macs.isEmpty {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                            Text("Looking for Macs with Devices open…").font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .padding(.leading, 46)
-                    }
-                    ForEach(nearby.macs) { mac in
-                        macRow(mac)
-                    }
+    private var options: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Pair with your Mac")
+                        .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    Text("On your Mac, open Holt Settings and pick Devices.")
+                        .foregroundStyle(.secondary)
                 }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
 
-                if case .failed(let message) = state {
-                    Label(message, systemImage: "exclamationmark.circle")
-                        .font(.subheadline)
+            if case .failed(let message) = state {
+                Section {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
+                        .font(.subheadline)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 28)
+
+            Section {
+                if QRScanner.isAvailable {
+                    Button {
+                        scanning = true
+                    } label: {
+                        OptionRow(symbol: "qrcode.viewfinder", title: "Scan the QR code", detail: "The quickest way.")
+                    }
+                } else {
+                    OptionRow(symbol: "camera", title: "Scan with the Camera app", detail: "Point it at the QR code on your Mac.")
+                }
+            }
+
+            Section("Nearby Macs") {
+                if nearby.macs.isEmpty {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("Looking for Macs with Devices open").foregroundStyle(.secondary)
+                    }
+                }
+                ForEach(nearby.macs) { mac in
+                    NavigationLink {
+                        CodeEntry(mac: mac) { code in start(PairingLink(id: mac.id, code: code)) }
+                    } label: {
+                        OptionRow(symbol: "laptopcomputer", title: mac.name, detail: "Type the code it shows.")
+                    }
+                }
+            }
         }
+        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func macRow(_ mac: Nearby.Mac) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Button {
-                withAnimation(.snappy) {
-                    chosen = mac
-                    code = ""
-                }
-                codeFocused = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "laptopcomputer").foregroundStyle(Brand.river)
-                    Text(mac.name).foregroundStyle(.primary)
-                    Spacer()
-                    if chosen != mac { Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary) }
-                }
-                .padding(.leading, 46)
+    private func start(_ link: PairingLink) {
+        state = .pairing
+        Task {
+            if let error = await library.pair(link) {
+                state = .failed(error)
+                nearby.start()
+            } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                state = .paired(library.devices.first(where: { $0.id == link.id })?.name ?? "your Mac")
             }
-            if chosen == mac {
-                TextField("000 000", text: $code)
+        }
+    }
+}
+
+private struct OptionRow: View {
+    let symbol: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(Brand.river)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).foregroundStyle(.primary)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// Six boxes for the code the Mac shows. Pairing starts on the sixth digit.
+private struct CodeEntry: View {
+    let mac: Nearby.Mac
+    let submit: (String) -> Void
+    @State private var code = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 28) {
+            VStack(spacing: 8) {
+                Text("Enter the code")
+                    .font(.system(.title, design: .rounded).weight(.bold))
+                Text("It's in Holt Settings on \(mac.name), under Devices.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            HStack(spacing: 10) {
+                ForEach(0..<6, id: \.self) { index in
+                    let digit = index < code.count ? String(Array(code)[index]) : ""
+                    Text(digit)
+                        .font(.system(size: 30, weight: .semibold, design: .rounded).monospacedDigit())
+                        .frame(width: 46, height: 58)
+                        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(index == code.count && focused ? Brand.river : .clear, lineWidth: 2)
+                        }
+                        // A gap between the two halves, the way the Mac shows the code.
+                        .padding(.trailing, index == 2 ? 10 : 0)
+                }
+            }
+            .background {
+                // The real field, invisible. The boxes above show what it holds.
+                TextField("", text: $code)
                     .keyboardType(.numberPad)
                     .textContentType(.oneTimeCode)
-                    .font(.system(size: 34, weight: .semibold, design: .rounded).monospacedDigit())
-                    .multilineTextAlignment(.center)
-                    .focused($codeFocused)
-                    .onChange(of: code) { _, new in
-                        code = String(new.filter(\.isNumber).prefix(6))
-                        if code.count == 6 { start(PairingLink(id: mac.id, code: code)) }
-                    }
-                    .padding(.leading, 46)
+                    .focused($focused)
+                    .opacity(0.01)
             }
+            .onTapGesture { focused = true }
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 32)
+        .onAppear { focused = true }
+        .onChange(of: code) { _, new in
+            code = String(new.filter(\.isNumber).prefix(6))
+            if code.count == 6 { submit(code) }
         }
     }
+}
 
-    private func paired(_ name: String) -> some View {
+private struct PairingProgress: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            ProgressView().controlSize(.large)
+            Text("Pairing").font(.system(.title3, design: .rounded).weight(.semibold))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct Paired: View {
+    let name: String
+    let done: () -> Void
+
+    var body: some View {
         VStack(spacing: 0) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
@@ -131,43 +210,15 @@ struct PairView: View {
                 .font(.system(.title2, design: .rounded).weight(.bold))
                 .multilineTextAlignment(.center)
                 .padding(.top, 20)
-            Text("What you copy on your Mac now shows up here, and what you send from this iPhone shows up there.")
+            Text("What you copy on your Mac shows up here. What you send from this iPhone lands there.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 10)
             Spacer()
-            Button("Done") { dismiss() }
+            Button("Done", action: done)
                 .buttonStyle(PrimaryButtonStyle())
         }
         .padding(.horizontal, 28)
         .padding(.bottom, 24)
-    }
-
-    private func way(symbol: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            Image(systemName: symbol)
-                .font(.title2)
-                .foregroundStyle(Brand.river)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func start(_ link: PairingLink) {
-        codeFocused = false
-        state = .pairing
-        Task {
-            if let error = await library.pair(link) {
-                state = .failed(error)
-                code = ""
-                nearby.start()
-            } else {
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                state = .paired(library.devices.first(where: { $0.id == link.id })?.name ?? "your Mac")
-            }
-        }
     }
 }

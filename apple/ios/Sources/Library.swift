@@ -25,6 +25,11 @@ final class Library {
 
     var paired: Bool { !devices.isEmpty }
 
+    /// "Lucas's MacBook Pro", or "your 2 Macs". Sending reaches every paired device.
+    var macs: String {
+        devices.count == 1 ? devices[0].name : "your \(devices.count) Macs"
+    }
+
     /// "Synced with MacBook Pro", like the Mac's popup footer.
     var syncStatus: (label: String, connected: Bool)? {
         guard paired else { return nil }
@@ -67,7 +72,7 @@ final class Library {
         let connected = await Core.shared.send(text)
         Core.log("send from the app: done in \(ms(since: start)) ms, connected: \(connected)")
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        show(connected ? "Sent to your Mac" : "Saved. It goes to your Mac when it's reachable.")
+        show(connected ? "Sent to \(macs)" : "Saved. It goes once \(macs) connects.")
         refresh()
     }
 

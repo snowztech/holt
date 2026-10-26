@@ -15,13 +15,20 @@ struct HomeView: View {
                     WelcomeView { showPair = true }
                 }
             }
-            .navigationTitle(library.paired ? "Holt" : "")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if library.paired {
+                    if #available(iOS 26, *) {
+                        // A title, not a button, so no glass behind it.
+                        ToolbarItem(placement: .topBarLeading) { BrandTitle() }.sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .topBarLeading) { BrandTitle() }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }
                 }
             }
-            .overlay(alignment: .bottom) { NoticeView(text: library.notice) }
             .sheet(isPresented: $showSettings) { SettingsView(library: library) }
             .sheet(isPresented: $showPair) { PairView(library: library, link: pairing) }
             // For development: `-HoltOpen pair` opens the pairing sheet, `-HoltOpen settings` Settings.
@@ -41,17 +48,27 @@ struct HomeView: View {
         }
     }
 
+    /// The newest clip, shown big at the top, when not searching.
+    private var latest: Clip? {
+        library.query.isEmpty ? library.clips.first(where: { !$0.pinned }) : nil
+    }
+
     private var history: some View {
         List {
-            if library.query.isEmpty {
-                SendHeader(library: library)
+            if let status = library.syncStatus, library.query.isEmpty {
+                StatusLine(label: status.label, connected: status.connected)
                     .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 18, trailing: 20))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 4, trailing: 20))
+            }
+            if let latest {
+                LatestClip(clip: latest, showSource: library.devices.count > 1) { library.copy(latest) }
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 4, trailing: 20))
             }
             ForEach(sections, id: \.title) { section in
                 Section {
                     ForEach(section.clips, id: \.id) { clip in
-                        ClipRow(clip: clip)
+                        ClipRow(clip: clip, showSource: library.devices.count > 1)
                             .contentShape(Rectangle())
                             .onTapGesture { library.copy(clip) }
                             .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
@@ -59,7 +76,7 @@ struct HomeView: View {
                                 Button(clip.pinned ? "Unpin" : "Pin", systemImage: clip.pinned ? "pin.slash" : "pin") {
                                     library.togglePin(clip)
                                 }
-                                .tint(Brand.river)
+                                .tint(Brand.riverDeep)
                             }
                             .swipeActions(edge: .trailing) {
                                 Button("Delete", systemImage: "trash", role: .destructive) { library.delete(clip) }
@@ -73,14 +90,15 @@ struct HomeView: View {
                     }
                 } header: {
                     Text(section.title)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color(.secondaryLabel))
                         .textCase(nil)
+                        .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 4, trailing: 20))
                 }
             }
         }
         .listStyle(.plain)
-        .searchable(text: $library.query, prompt: "Search your clips")
+        .searchable(text: $library.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your clips")
         .overlay {
             if library.clips.isEmpty {
                 if library.query.isEmpty {
@@ -92,13 +110,22 @@ struct HomeView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 10) {
+                if let notice = library.notice {
+                    NoticeToast(message: notice).transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                SendBar(library: library)
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: library.notice)
+        }
     }
 
-    /// Pinned first, then by day, like the Mac popup.
+    /// Pinned first, then by day, like the Mac popup. The newest clip sits above, on its own.
     private var sections: [(title: String, clips: [Clip])] {
         let calendar = Calendar.current
         var groups: [(title: String, clips: [Clip])] = []
-        for clip in library.clips {
+        for clip in library.clips where clip.id != latest?.id {
             let date = Date(timeIntervalSince1970: TimeInterval(clip.createdAt) / 1000)
             let title =
                 clip.pinned
@@ -113,61 +140,163 @@ struct HomeView: View {
     }
 }
 
-private struct ClipRow: View {
-    let clip: Clip
-
+/// Skip's face and the name, like the search field in the Mac popup.
+private struct BrandTitle: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if clip.kind == .link {
-                    Image(systemName: "link").font(.subheadline).foregroundStyle(Brand.river)
-                }
-                Text(clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
-                    .lineLimit(3)
-            }
-            HStack(spacing: 5) {
-                if clip.pinned {
-                    Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Brand.river)
-                }
-                Text(meta).font(.caption).foregroundStyle(.secondary)
-            }
+        HStack(spacing: 10) {
+            Skip(faceOnly: true).frame(width: 34, height: 27)
+            Text("Holt").font(.system(.title2, design: .rounded).weight(.bold))
         }
-    }
-
-    private var meta: String {
-        let date = Date(timeIntervalSince1970: TimeInterval(clip.createdAt) / 1000)
-        let age = date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
-        return "\(clip.device ?? "This iPhone") · \(age)"
+        .fixedSize()
+        .accessibilityElement(children: .combine)
     }
 }
 
-/// The top of the list: sync status and the paste button, light, without a box.
-private struct SendHeader: View {
-    let library: Library
+/// "Copied", "Sent to your Mac". Skip hops in with it, like the arrival toast on the Mac.
+private struct NoticeToast: View {
+    let message: String
+    @State private var landed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let status = library.syncStatus {
-                HStack(spacing: 6) {
-                    Circle().fill(status.connected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 7, height: 7)
-                    Text(status.label).font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
-            // Apple's paste button reads the clipboard without the "Allow Paste?" prompt.
-            HStack(spacing: 12) {
-                PasteButton(payloadType: String.self) { strings in
-                    Task { @MainActor in await library.send(strings.joined(separator: "\n")) }
-                }
-                .buttonBorderShape(.capsule)
-                .labelStyle(.titleAndIcon)
-                // The deep teal keeps the white label readable in dark mode too.
-                .tint(Brand.riverDeep)
-                Text("Send what you copied to your Mac")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            Skip(faceOnly: true)
+                .frame(width: 28, height: 22)
+                .offset(y: landed ? 0 : -6)
+                .opacity(landed ? 1 : 0)
+            Text(message).font(.subheadline.weight(.semibold))
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 18)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        .onAppear {
+            if reduceMotion {
+                landed = true
+            } else {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.55).delay(0.08)) { landed = true }
             }
         }
     }
+}
+
+private struct StatusLine: View {
+    let label: String
+    let connected: Bool
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle().fill(connected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 7, height: 7)
+            Text(label).font(.subheadline).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// The one bold element: the newest clip, large, one tap to copy.
+private struct LatestClip: View {
+    let clip: Clip
+    let showSource: Bool
+    let copy: () -> Void
+
+    var body: some View {
+        Button(action: copy) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .font(
+                        .system(clip.text.count > 80 ? .body : .title3, design: clip.text.contains("\n") ? .monospaced : .default)
+                            .weight(.medium)
+                    )
+                    .foregroundStyle(.primary)
+                    .lineLimit(5)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack {
+                    Text(source(clip, showSource).map { "\($0), \(age(clip).lowercased())" } ?? age(clip))
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Spacer()
+                    HStack(spacing: 5) {
+                        Image(systemName: "doc.on.doc")
+                        Text("Copy")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Brand.river)
+                }
+            }
+            .padding(18)
+            .background(Brand.river.opacity(0.09), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ClipRow: View {
+    let clip: Clip
+    let showSource: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if clip.pinned {
+                    Image(systemName: "pin.fill").font(.footnote).foregroundStyle(Brand.river)
+                } else if clip.kind == .link {
+                    Image(systemName: "link").font(.footnote).foregroundStyle(Brand.river)
+                }
+                Text(clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .lineLimit(2)
+            }
+            HStack {
+                if let source = source(clip, showSource) {
+                    Text(source)
+                    Spacer()
+                }
+                Text(age(clip))
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Paste and send, at thumb height. Apple's paste button reads the clipboard without
+/// the "Allow Paste?" prompt.
+private struct SendBar: View {
+    let library: Library
+
+    var body: some View {
+        HStack(spacing: 14) {
+            PasteButton(payloadType: String.self) { strings in
+                Task { @MainActor in await library.send(strings.joined(separator: "\n")) }
+            }
+            .buttonBorderShape(.capsule)
+            .labelStyle(.titleAndIcon)
+            .controlSize(.large)
+            // The deep teal keeps the white label readable in dark mode too.
+            .tint(Brand.riverDeep)
+            // Apple fixes the button's label to "Paste", so the text says where it goes.
+            Text(destination).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.bar)
+    }
+
+    private var destination: String {
+        library.devices.contains(where: \.online) ? "Sends to \(library.macs)" : "Sends once \(library.macs) connects"
+    }
+}
+
+/// Where a clip came from. With one Mac, naming it on every clip is noise, so only
+/// clips from this iPhone say so.
+private func source(_ clip: Clip, _ showDevice: Bool) -> String? {
+    clip.device == nil ? "This iPhone" : showDevice ? clip.device : nil
+}
+
+private func age(_ clip: Clip) -> String {
+    let date = Date(timeIntervalSince1970: TimeInterval(clip.createdAt) / 1000)
+    if Date().timeIntervalSince(date) < 60 { return "Just now" }
+    return date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
 }
 
 /// Before pairing: the one place Skip greets you.
@@ -198,26 +327,5 @@ private struct WelcomeView: View {
         .padding(.horizontal, 28)
         .padding(.bottom, 24)
         .frame(maxWidth: 520)
-    }
-}
-
-/// A short notice at the bottom, like "Copied" or "Sent to your Mac".
-private struct NoticeView: View {
-    let text: String?
-
-    var body: some View {
-        if let text {
-            Label(text, systemImage: "checkmark.circle.fill")
-                .font(.subheadline.weight(.semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.primary, Brand.river)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background(.regularMaterial, in: Capsule())
-                .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-                .padding(.bottom, 90)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: text)
-        }
     }
 }

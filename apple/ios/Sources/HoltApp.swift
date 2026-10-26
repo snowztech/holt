@@ -15,10 +15,30 @@ struct HoltApp: App {
                 }
                 // For development: `-HoltPairLink "holt://pair?…"` pairs as if the Camera opened it.
                 .task {
+                    Appearance.apply()
                     if let link = UserDefaults.standard.string(forKey: "HoltPairLink") {
                         library.pendingPairing = PairingLink(link)
                     }
                 }
+        }
+    }
+}
+
+/// "system", "light" or "dark". Set on the window rather than with preferredColorScheme,
+/// which doesn't reach a sheet that's already open.
+enum Appearance {
+    static let key = "appearance"
+
+    @MainActor
+    static func apply() {
+        let style: UIUserInterfaceStyle =
+            switch UserDefaults.standard.string(forKey: key) {
+            case "light": .light
+            case "dark": .dark
+            default: .unspecified
+            }
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            scene.windows.forEach { $0.overrideUserInterfaceStyle = style }
         }
     }
 }

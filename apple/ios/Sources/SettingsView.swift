@@ -3,8 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     let library: Library
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     @State private var showPair = false
+    @AppStorage(Appearance.key) private var appearance = "system"
 
     var body: some View {
         NavigationStack {
@@ -29,21 +29,19 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    tip(
-                        "doc.on.clipboard", "Allow paste",
-                        "So sending what you copied never asks first: Settings → Holt → Paste from Other Apps → Allow.",
-                        button: "Open Settings"
-                    ) {
-                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    NavigationLink {
+                        SendFaster()
+                    } label: {
+                        Label("Send faster", systemImage: "bolt")
                     }
-                    tip("button.horizontal.top.press", "Action Button", "Settings → Action Button → Shortcut → Send Clipboard to Holt.")
-                    tip("switch.2", "Control Center", "Open Control Center, tap +, and add Send Clipboard from Holt.")
-                    tip("hand.tap", "Back Tap", "Settings → Accessibility → Touch → Back Tap → Send Clipboard to Holt.")
-                    tip("square.and.arrow.up", "Share sheet", "Select text or a link in any app, tap Share, then Holt.")
-                } header: {
-                    Text("Send faster")
-                } footer: {
-                    Text("Copy something, then one press sends it to your Mac.")
+                    Picker(selection: $appearance) {
+                        Text("System").tag("system")
+                        Text("Light").tag("light")
+                        Text("Dark").tag("dark")
+                    } label: {
+                        Label("Appearance", systemImage: "circle.lefthalf.filled")
+                    }
+                    .onChange(of: appearance) { Appearance.apply() }
                 }
 
                 Section("About") {
@@ -55,8 +53,6 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink("Diagnostics") { DiagnosticsView() }
-                } footer: {
-                    Text("Timings for pairing and sending, to help while Holt for iPhone is in testing.")
                 }
             }
             .navigationTitle("Settings")
@@ -66,25 +62,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showPair) { PairView(library: library, link: nil) }
         }
-    }
-
-    private func tip(_ symbol: String, _ title: String, _ detail: String, button: String? = nil, action: (() -> Void)? = nil)
-        -> some View
-    {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.body)
-                .foregroundStyle(Brand.river)
-                .frame(width: 26)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                Text(detail).font(.caption).foregroundStyle(.secondary)
-                if let button, let action {
-                    Button(button, action: action).font(.caption.weight(.semibold)).padding(.top, 2)
-                }
-            }
-        }
-        .padding(.vertical, 2)
     }
 }
 
@@ -111,5 +88,52 @@ private struct DiagnosticsView: View {
         .task {
             lines = ((try? String(contentsOf: Core.logFile, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
         }
+    }
+}
+
+/// Ways to send without opening Holt.
+private struct SendFaster: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Form {
+            Section {
+                tip(
+                    "doc.on.clipboard", "Allow paste",
+                    "So sending what you copied never asks first: Settings → Holt → Paste from Other Apps → Allow.",
+                    button: "Open Settings"
+                ) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                tip("button.horizontal.top.press", "Action Button", "Settings → Action Button → Shortcut → Send Clipboard to Holt.")
+                tip("switch.2", "Control Center", "Open Control Center, tap +, and add Send Clipboard from Holt.")
+                tip("hand.tap", "Back Tap", "Settings → Accessibility → Touch → Back Tap → Send Clipboard to Holt.")
+                tip("square.and.arrow.up", "Share sheet", "Select text or a link in any app, tap Share, then Holt.")
+            } header: {
+                Text("Send faster")
+            } footer: {
+                Text("Copy something, then one press sends it.")
+            }
+        }
+        .navigationTitle("Send faster")
+    }
+
+    private func tip(_ symbol: String, _ title: String, _ detail: String, button: String? = nil, action: (() -> Void)? = nil)
+        -> some View
+    {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.body)
+                .foregroundStyle(Brand.river)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+                if let button, let action {
+                    Button(button, action: action).font(.caption.weight(.semibold)).padding(.top, 2)
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
