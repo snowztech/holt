@@ -40,6 +40,8 @@ targets:
     templates: [HoltCore]
     sources:
       - path: Sources
+      # Skip, his face and the colors, the same files the Mac app builds as a module.
+      - path: ../Sources/HoltBrand
     dependencies:
       - target: HoltShare
       - target: HoltControls
@@ -50,10 +52,17 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocalNetworkUsageDescription: Holt connects directly to your Macs on this network to sync clips.
+        # Macs with Settings → Devices open announce themselves over Bonjour, for pairing with the code.
+        NSBonjourServices: [_holt-pair._tcp]
+        # The QR code in Holt on the Mac is a holt://pair link the Camera opens here.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.holtclip.Holt
+            CFBundleURLSchemes: [holt]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.holtclip.Holt
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   # Share → Holt from any app.
   HoltShare:

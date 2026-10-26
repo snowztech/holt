@@ -59,6 +59,24 @@ You can also open `apple/Package.swift` in Xcode after running `make core` once.
 
 Logs go to the unified log: in Console.app, filter by `subsystem:app.holtclip.Holt`.
 
+## Working on the iPhone app
+
+```sh
+make ios                       # builds the core for iPhone and the app for the Simulator
+open apple/ios/Holt.xcodeproj  # to run it on your phone, signed with your team
+```
+
+`apple/ios/project.yml` is the source of truth. XcodeGen generates the Xcode project, `Info.plist` and entitlements from it, so none of those are committed.
+
+The app shares `HoltBrand` (Skip and the colors) with the Mac app. Its share sheet and Control Center button are app extensions, so the history lives in the App Group `group.app.holtclip.Holt` that all three open.
+
+For a stand-in Mac, run `cd core && cargo run --release --example peer`. Launch arguments help with testing:
+
+- `-HoltPairLink "holt://pair?id=…&code=…"` pairs as if the Camera opened the Mac's QR code
+- `-HoltOpen pair` or `-HoltOpen settings` opens that sheet
+
+`docs/ios-spike.md` has what we measured and what's still to test on a real iPhone.
+
 ## Tests and checks
 
 ```sh
