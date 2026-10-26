@@ -102,12 +102,19 @@ struct MarkView: View {
 }
 
 /// Skip the otter, holding a pebble. Same shapes as the logo SVG, on a 200×200 grid.
+/// `faceOnly` drops the pebble and frames just the head, for small spots like the arrival notice.
 struct Skip: View {
+    var faceOnly = false
+
+    /// The part of the 200×200 grid to fit in the view.
+    private var bounds: CGRect { faceOnly ? CGRect(x: 18, y: 46, width: 164, height: 126) : CGRect(x: 0, y: 0, width: 200, height: 200) }
+
     var body: some View {
         Canvas { ctx, size in
-            let scale = min(size.width, size.height) / 200
-            ctx.translateBy(x: (size.width - 200 * scale) / 2, y: (size.height - 200 * scale) / 2)
+            let scale = min(size.width / bounds.width, size.height / bounds.height)
+            ctx.translateBy(x: (size.width - bounds.width * scale) / 2, y: (size.height - bounds.height * scale) / 2)
             ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: -bounds.minX, y: -bounds.minY)
 
             func oval(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat, _ color: Color) {
                 ctx.fill(Path(ellipseIn: CGRect(x: cx - rx, y: cy - ry, width: rx * 2, height: ry * 2)), with: .color(color))
@@ -154,12 +161,14 @@ struct Skip: View {
                     }
                 }, Brand.furDark, 2.4)
 
-            oval(100, 177, 24, 15, Brand.pebble)
-            oval(93, 172, 7, 3.5, .white.opacity(0.35))
-            oval(77, 174, 11, 9, Brand.furDark)
-            oval(123, 174, 11, 9, Brand.furDark)
+            if !faceOnly {
+                oval(100, 177, 24, 15, Brand.pebble)
+                oval(93, 172, 7, 3.5, .white.opacity(0.35))
+                oval(77, 174, 11, 9, Brand.furDark)
+                oval(123, 174, 11, 9, Brand.furDark)
+            }
         }
-        .aspectRatio(1, contentMode: .fit)
+        .aspectRatio(bounds.width / bounds.height, contentMode: .fit)
     }
 }
 

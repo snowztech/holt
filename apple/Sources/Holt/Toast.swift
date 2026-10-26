@@ -58,9 +58,8 @@ private struct ToastView: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            MarkView()
-                .frame(width: 22, height: 22)
-                .foregroundStyle(Brand.river)
+            Skip(faceOnly: true)
+                .frame(width: 30, height: 24)
                 .offset(y: landed ? 0 : -6)
                 .opacity(landed ? 1 : 0)
             VStack(alignment: .leading, spacing: 1) {
