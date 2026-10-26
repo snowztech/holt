@@ -23,10 +23,11 @@ extension Color {
     }
 
     init(light: UInt32, dark: UInt32) {
-        self.init(nsColor: NSColor(name: nil) { appearance in
-            let hex = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
-            return NSColor(Color(hex: hex))
-        })
+        self.init(
+            nsColor: NSColor(name: nil) { appearance in
+                let hex = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+                return NSColor(Color(hex: hex))
+            })
     }
 }
 
@@ -49,8 +50,10 @@ enum Cairn {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
             NSColor.black.setFill()
             for stone in stones {
-                let path = NSBezierPath(ovalIn: CGRect(x: -stone.rect.width / 2, y: -stone.rect.height / 2,
-                                                       width: stone.rect.width, height: stone.rect.height))
+                let path = NSBezierPath(
+                    ovalIn: CGRect(
+                        x: -stone.rect.width / 2, y: -stone.rect.height / 2,
+                        width: stone.rect.width, height: stone.rect.height))
                 var transform = AffineTransform(translationByX: stone.rect.midX, byY: stone.rect.midY)
                 transform.rotate(byDegrees: stone.tilt)
                 path.transform(using: transform)
@@ -126,17 +129,19 @@ struct Skip: View {
             nose.addQuadCurve(to: CGPoint(x: 88, y: 113), control: CGPoint(x: 88, y: 122))
             ctx.fill(nose, with: .color(Brand.eye))
 
-            line({ p in
-                p.move(to: CGPoint(x: 100, y: 124)); p.addLine(to: CGPoint(x: 100, y: 131))
-                p.addQuadCurve(to: CGPoint(x: 84, y: 133), control: CGPoint(x: 92, y: 139))
-                p.move(to: CGPoint(x: 100, y: 131))
-                p.addQuadCurve(to: CGPoint(x: 116, y: 133), control: CGPoint(x: 108, y: 139))
-            }, Brand.eye, 3)
-            line({ p in
-                for (from, to) in [((62, 124), (34, 118)), ((62, 131), (33, 133)), ((138, 124), (166, 118)), ((138, 131), (167, 133))] {
-                    p.move(to: CGPoint(x: from.0, y: from.1)); p.addLine(to: CGPoint(x: to.0, y: to.1))
-                }
-            }, Brand.furDark, 2.2)
+            line(
+                { p in
+                    p.move(to: CGPoint(x: 100, y: 124)); p.addLine(to: CGPoint(x: 100, y: 131))
+                    p.addQuadCurve(to: CGPoint(x: 84, y: 133), control: CGPoint(x: 92, y: 139))
+                    p.move(to: CGPoint(x: 100, y: 131))
+                    p.addQuadCurve(to: CGPoint(x: 116, y: 133), control: CGPoint(x: 108, y: 139))
+                }, Brand.eye, 3)
+            line(
+                { p in
+                    for (from, to) in [((62, 124), (34, 118)), ((62, 131), (33, 133)), ((138, 124), (166, 118)), ((138, 131), (167, 133))] {
+                        p.move(to: CGPoint(x: from.0, y: from.1)); p.addLine(to: CGPoint(x: to.0, y: to.1))
+                    }
+                }, Brand.furDark, 2.2)
 
             oval(100, 174, 24, 15, Brand.pebble)
             oval(93, 169, 7, 3.5, .white.opacity(0.35))
@@ -166,7 +171,7 @@ struct AppIcon: View {
 func renderIcon(to path: String) {
     let renderer = ImageRenderer(content: AppIcon())
     guard let image = renderer.cgImage,
-          let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
     else {
         fputs("could not render icon\n", stderr)
         exit(1)

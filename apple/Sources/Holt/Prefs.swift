@@ -83,7 +83,7 @@ struct Shortcut: Equatable {
     init?(event: NSEvent) {
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
         guard !flags.isDisjoint(with: [.command, .option, .control]),
-              let key = event.charactersIgnoringModifiers?.uppercased(), !key.isEmpty
+            let key = event.charactersIgnoringModifiers?.uppercased(), !key.isEmpty
         else { return nil }
         var carbon: UInt32 = 0
         if flags.contains(.control) { carbon |= UInt32(controlKey) }

@@ -77,12 +77,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         hotKey = HotKey(Prefs.shortcut) { [weak self] in self?.popup.toggle() }
 
-        settings = SettingsWindow(model: SettingsModel(
-            node: node,
-            onShortcutChange: { [weak self] in self?.hotKey.register($0) },
-            onHistoryChange: { [weak self] in self?.prune() },
-            onClear: { [weak self] in try? self?.store.clear() }
-        ))
+        settings = SettingsWindow(
+            model: SettingsModel(
+                node: node,
+                onShortcutChange: { [weak self] in self?.hotKey.register($0) },
+                onHistoryChange: { [weak self] in self?.prune() },
+                onClear: { [weak self] in try? self?.store.clear() }
+            ))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = Cairn.menuBarImage()
@@ -121,7 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(.sectionHeader(title: "Recent"))
             for clip in recent {
                 let title = oneLine(clip.text)
-                let item = NSMenuItem(title: title.count > 44 ? String(title.prefix(43)) + "…" : title, action: #selector(copyRecent(_:)), keyEquivalent: "")
+                let item = NSMenuItem(
+                    title: title.count > 44 ? String(title.prefix(43)) + "…" : title, action: #selector(copyRecent(_:)), keyEquivalent: "")
                 item.representedObject = clip.text
                 item.image = AppInfo.icon(clip.sourceApp).map(resized) ?? symbol("doc.on.clipboard")
                 item.toolTip = clip.text.count > 44 ? String(clip.text.prefix(400)) : nil

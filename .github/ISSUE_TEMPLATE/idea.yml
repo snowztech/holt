@@ -1,0 +1,15 @@
+name: Idea
+description: Something Holt should do.
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation, not the solution. "I copy a lot of hex colors and want to see them" beats "add a color preview".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help

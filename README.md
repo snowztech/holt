@@ -1,5 +1,7 @@
 # Holt
 
+[![CI](https://github.com/snowztech/holt/actions/workflows/ci.yml/badge.svg)](https://github.com/snowztech/holt/actions/workflows/ci.yml)
+
 An open-source clipboard history for macOS. Press ⇧⌘V, find anything you copied, paste it.
 
 Pair your Macs and what you copy on one is on the other's clipboard a moment later. iPhone and Windows/Linux are next. See the roadmap below.
@@ -26,15 +28,16 @@ The Makefile signs with your Apple Development certificate when you have one, so
 
 | Key | Action |
 | --- | --- |
-| ⇧⌘V | Open or close Holt |
+| ⇧⌘V | Open or close Holt (change it in Settings) |
 | ↑ ↓ | Move |
 | ⏎ | Paste |
-| ⌘1 to ⌘9 | Paste that row |
+| ⌘1 to ⌘9 | Paste that row (hold ⌘ to see the numbers) |
+| ⌘O | Open a link |
 | ⌘P | Pin or unpin |
 | ⌘⌫ | Delete |
 | esc | Close |
 
-History lives in `~/Library/Application Support/Holt/holt.db`. Unpinned clips are pruned after 30 days or past 5,000 clips. Copies marked concealed by password managers are never recorded.
+History lives in `~/Library/Application Support/Holt/holt.db`. Unpinned clips are kept for a month by default (change it in Settings → History), up to 5,000. Copies that password managers mark as private are never recorded, and you can add apps to ignore.
 
 ## Sync
 
@@ -49,15 +52,9 @@ Copies, pins and deletes all sync. A clip copied in the last 2 minutes on anothe
 
 The networking is [iroh](https://iroh.computer). The code is checked with SPAKE2, so someone on the same network gets one guess per attempt, and pairing stops after 5 wrong codes.
 
-## Layout
+## Contributing
 
-```
-core/holt-core/   Rust: storage, search, pairing and sync, exposed to Swift with UniFFI
-apple/            SwiftPM package: the menu bar app
-Makefile          core, mac, run, test, clean
-```
-
-`make test` runs the core tests. `cargo test -- --ignored real_network` in `core/` also pairs and syncs two nodes over your real network. `make icon` redraws `apple/AppIcon.icns` from the Skip drawing in `Brand.swift`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how the code fits together, how to work on the UI, and the checks CI runs (`make test`, `make lint`).
 
 ## Roadmap
 

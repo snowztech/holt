@@ -145,11 +145,11 @@ final class PopupController {
             return event
         }
         switch Int(event.keyCode) {
-        case 125: model.move(1)                                    // ↓
-        case 126: model.move(-1)                                   // ↑
-        case 36, 76: if let clip = model.selected { onPick(clip) } // return, enter
-        case 53: close()                                           // esc
-        case 51 where command: model.deleteSelected()              // ⌘⌫
+        case 125: model.move(1)  // ↓
+        case 126: model.move(-1)  // ↑
+        case 36, 76: if let clip = model.selected { onPick(clip) }  // return, enter
+        case 53: close()  // esc
+        case 51 where command: model.deleteSelected()  // ⌘⌫
         default:
             guard command, let key = event.charactersIgnoringModifiers else { return event }
             if key == "p" {
@@ -497,7 +497,8 @@ private func highlight(_ text: String, _ query: String) -> AttributedString {
     for word in query.split(whereSeparator: \.isWhitespace) {
         var start = result.startIndex
         while start < result.endIndex,
-              let range = result[start...].range(of: word, options: .caseInsensitive) {
+            let range = result[start...].range(of: word, options: .caseInsensitive)
+        {
             result[range].inlinePresentationIntent = .stronglyEmphasized
             start = range.upperBound
         }

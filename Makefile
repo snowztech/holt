@@ -5,7 +5,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 # Ad-hoc signing ("-") works too, but macOS forgets the grant on every build.
 SIGN_ID ?= $(shell security find-identity -p codesigning -v | grep -m1 "Apple Development" | sed -E 's/.*"(.*)"/\1/')
 
-.PHONY: core mac icon run test clean
+.PHONY: core mac icon run test lint fmt clean
 
 core:
 	cd core && cargo build --release
@@ -46,6 +46,16 @@ run: mac
 
 test:
 	cd core && cargo test
+
+SWIFT_SOURCES := apple/Sources/Holt apple/Package.swift
+
+lint:
+	cd core && cargo fmt --check && cargo clippy --all-targets -- -D warnings
+	swift format lint --strict -r $(SWIFT_SOURCES)
+
+fmt:
+	cd core && cargo fmt
+	swift format -i -r $(SWIFT_SOURCES)
 
 clean:
 	rm -rf build apple/.build apple/HoltCoreFFI.xcframework apple/Sources/HoltCore/holt_core.swift

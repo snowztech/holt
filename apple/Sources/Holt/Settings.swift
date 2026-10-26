@@ -29,7 +29,8 @@ final class SettingsModel: ObservableObject {
     let onHistoryChange: () -> Void
     let onClear: () -> Void
 
-    init(node: Node?, onShortcutChange: @escaping (Shortcut) -> Void, onHistoryChange: @escaping () -> Void, onClear: @escaping () -> Void) {
+    init(node: Node?, onShortcutChange: @escaping (Shortcut) -> Void, onHistoryChange: @escaping () -> Void, onClear: @escaping () -> Void)
+    {
         devices = node.map(DevicesModel.init)
         self.onShortcutChange = onShortcutChange
         self.onHistoryChange = onHistoryChange
