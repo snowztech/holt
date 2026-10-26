@@ -51,9 +51,12 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: Holt
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocalNetworkUsageDescription: Holt connects directly to your Macs on this network to sync clips.
+        NSCameraUsageDescription: Holt uses the camera to scan the pairing code on your Mac.
         # Macs with Settings → Devices open announce themselves over Bonjour, for pairing with the code.
         NSBonjourServices: [_holt-pair._tcp]
         # The QR code in Holt on the Mac is a holt://pair link the Camera opens here.
@@ -77,6 +80,8 @@ targets:
       path: Share/Info.plist
       properties:
         CFBundleDisplayName: Holt
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -103,6 +108,8 @@ targets:
       path: Controls/Info.plist
       properties:
         CFBundleDisplayName: Holt
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

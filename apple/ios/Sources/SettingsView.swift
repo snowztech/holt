@@ -4,6 +4,7 @@ struct SettingsView: View {
     let library: Library
     @Environment(\.dismiss) private var dismiss
     @State private var showPair = false
+    @State private var showSendFaster = UserDefaults.standard.string(forKey: "HoltOpen") == "sendfaster"
     @AppStorage(Appearance.key) private var appearance = "system"
 
     var body: some View {
@@ -61,6 +62,7 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
             .sheet(isPresented: $showPair) { PairView(library: library, link: nil) }
+            .navigationDestination(isPresented: $showSendFaster) { SendFaster() }
         }
     }
 }
@@ -98,24 +100,21 @@ private struct SendFaster: View {
     var body: some View {
         Form {
             Section {
-                tip(
-                    "doc.on.clipboard", "Allow paste",
-                    "So sending what you copied never asks first: Settings → Holt → Paste from Other Apps → Allow.",
-                    button: "Open Settings"
-                ) {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-                }
                 tip("button.horizontal.top.press", "Action Button", "Settings → Action Button → Shortcut → Send Clipboard to Holt.")
                 tip("switch.2", "Control Center", "Open Control Center, tap +, and add Send Clipboard from Holt.")
                 tip("hand.tap", "Back Tap", "Settings → Accessibility → Touch → Back Tap → Send Clipboard to Holt.")
                 tip("square.and.arrow.up", "Share sheet", "Select text or a link in any app, tap Share, then Holt.")
-            } header: {
-                Text("Send faster")
             } footer: {
                 Text("Copy something, then one press sends it.")
             }
+            Section {
+                tip("doc.on.clipboard", "Allow paste", "So sending never asks first.", button: "Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+            }
         }
         .navigationTitle("Send faster")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func tip(_ symbol: String, _ title: String, _ detail: String, button: String? = nil, action: (() -> Void)? = nil)
