@@ -57,6 +57,7 @@ icon:
 		sips -z $$((s * 2)) $$((s * 2)) build/icon-1024.png --out build/AppIcon.iconset/icon_$${s}x$${s}@2x.png >/dev/null; \
 	done
 	iconutil -c icns build/AppIcon.iconset -o apple/AppIcon.icns
+	apple/.build/release/Holt --render-phone-icon apple/ios/Sources/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 
 # The iPhone app in the Simulator. Open apple/ios/Holt.xcodeproj in Xcode to run it on a phone.
 ios: core-ios

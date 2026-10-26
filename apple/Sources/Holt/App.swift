@@ -9,8 +9,8 @@ private let log = Logger(subsystem: "app.holtclip.Holt", category: "app")
 enum Main {
     static func main() {
         let args = CommandLine.arguments
-        if args.count == 3, args[1] == "--render-icon" {
-            MainActor.assumeIsolated { renderIcon(to: args[2]) }
+        if args.count == 3, args[1] == "--render-icon" || args[1] == "--render-phone-icon" {
+            MainActor.assumeIsolated { renderIcon(to: args[2], phone: args[1] == "--render-phone-icon") }
             return
         }
         let app = NSApplication.shared

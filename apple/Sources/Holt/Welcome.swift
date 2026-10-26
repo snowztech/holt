@@ -1,4 +1,5 @@
 import AppKit
+import HoltBrand
 import SwiftUI
 
 /// First launch: what Holt does, and the permissions it needs, each checked off live.

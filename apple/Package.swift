@@ -11,10 +11,13 @@ let package = Package(
         // Built from core/ by `make core`.
         .binaryTarget(name: "HoltCoreFFI", path: "HoltCoreFFI.xcframework"),
         .target(name: "HoltCore", dependencies: ["HoltCoreFFI"]),
+        // Skip, his face and the colors, shared with the iPhone app.
+        .target(name: "HoltBrand"),
         .executableTarget(
             name: "Holt",
             dependencies: [
                 "HoltCore",
+                "HoltBrand",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             linkerSettings: [

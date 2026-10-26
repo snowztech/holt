@@ -1,4 +1,6 @@
 import AppKit
+import CoreImage.CIFilterBuiltins
+import HoltBrand
 import SwiftUI
 import HoltCore
 
@@ -7,6 +9,10 @@ extension Device: Identifiable {}
 @MainActor
 final class DevicesModel: ObservableObject {
     @Published private(set) var code = ""
+    /// What the QR code holds. The iPhone's Camera opens it in Holt, which pairs.
+    var pairingLink: String {
+        "holt://pair?id=\(node.deviceId())&code=\(code)"
+    }
     @Published private(set) var devices: [Device] = []
     @Published private(set) var nearby: [Device] = []
     /// The nearby device the user is typing a code for.
@@ -18,12 +24,19 @@ final class DevicesModel: ObservableObject {
 
     private let node: Node
     private var timer: Timer?
+    /// Announces this Mac over Bonjour while Devices is open, so an iPhone can list it
+    /// and pair with the code. iPhones can't use the core's mDNS without a special entitlement.
+    private var bonjour: NetService?
     /// Devices already paired when the window opened, to spot new ones.
     private var known: Set<String> = []
 
     init(node: Node) { self.node = node }
 
     func open() {
+        let service = NetService(domain: "local.", type: "_holt-pair._tcp.", name: "", port: 9)
+        service.setTXTRecord(NetService.data(fromTXTRecord: ["id": Data(node.deviceId().utf8)]))
+        service.publish()
+        bonjour = service
         code = node.startPairing()
         paired = nil
         devices = (try? node.devices()) ?? []
@@ -35,6 +48,8 @@ final class DevicesModel: ObservableObject {
     }
 
     func close() {
+        bonjour?.stop()
+        bonjour = nil
         timer?.invalidate()
         timer = nil
         node.stopPairing()
@@ -128,17 +143,30 @@ struct DevicesView: View {
 
             section("PAIR A NEW DEVICE") {
                 HStack(alignment: .center, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("This Mac's code").font(.callout).foregroundStyle(.secondary)
-                        Text(spaced(model.code))
-                            .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                            .foregroundStyle(Brand.river)
-                            .textSelection(.enabled)
+                    if let qr = qrCode(model.pairingLink) {
+                        Image(nsImage: qr)
+                            .interpolation(.none)
+                            .resizable()
+                            .frame(width: 104, height: 104)
+                            .padding(6)
+                            .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .help("Point your iPhone's Camera at this code")
                     }
-                    Text("On your other Mac, open Holt Settings → Devices, pick this Mac under Nearby, and type this code.")
+                    VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("This Mac's code").font(.callout).foregroundStyle(.secondary)
+                            Text(spaced(model.code))
+                                .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
+                                .foregroundStyle(Brand.river)
+                                .textSelection(.enabled)
+                        }
+                        Text(
+                            "iPhone: point the Camera at the code. Other Mac: open Holt Settings → Devices, pick this Mac under Nearby, and type the number."
+                        )
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -210,4 +238,16 @@ struct DevicesView: View {
     private func spaced(_ code: String) -> String {
         code.count == 6 ? "\(code.prefix(3)) \(code.suffix(3))" : code
     }
+}
+
+/// A crisp QR code image for `text`, drawn one pixel per module and scaled up by SwiftUI.
+@MainActor
+private func qrCode(_ text: String) -> NSImage? {
+    let filter = CIFilter.qrCodeGenerator()
+    filter.message = Data(text.utf8)
+    filter.correctionLevel = "M"
+    guard let output = filter.outputImage,
+        let cgImage = CIContext().createCGImage(output, from: output.extent)
+    else { return nil }
+    return NSImage(cgImage: cgImage, size: output.extent.size)
 }

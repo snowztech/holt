@@ -20,6 +20,10 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_holt-pair._tcp</string>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Holt looks for your other devices on this network so you can pair them and sync clips directly.</string>
 </dict>

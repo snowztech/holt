@@ -1,4 +1,5 @@
 import AppKit
+import HoltBrand
 import SwiftUI
 import HoltCore
 
