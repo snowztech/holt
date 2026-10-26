@@ -1,7 +1,9 @@
 import AppKit
-import Carbon
 import HoltCore
 import SystemConfiguration
+import os
+
+private let log = Logger(subsystem: "app.holtclip.Holt", category: "app")
 
 @main
 enum Main {
@@ -21,18 +23,22 @@ enum Main {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var store: Store!
     /// Nil if networking failed to start. History still works without it.
     private var node: Node?
-    private var devicesWindow: DevicesWindow?
     private var watcher: ClipboardWatcher!
     private var popup: PopupController!
     private var hotKey: HotKey!
     private var statusItem: NSStatusItem!
+    private var settings: SettingsWindow!
+    private var welcome: WelcomeWindow?
+    private let toast = ArrivalToast()
+    private var pruneTimer: Timer?
     private var askedForAccessibility = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Prefs.registerDefaults()
         do {
             store = try Store.open(path: Self.databasePath())
         } catch {
@@ -43,96 +49,150 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
-        _ = try? store.prune(maxAgeDays: 30, maxUnpinned: 5000)
         do {
             node = try Node.start(store: store, deviceName: Self.computerName())
         } catch {
-            NSLog("Holt: sync is off: \(error)")
+            log.error("sync is off: \(error, privacy: .public)")
+        }
+        prune()
+        pruneTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.prune() }
         }
 
         watcher = ClipboardWatcher(
-            onCopy: { [weak self] text, app in _ = try? self?.store.add(text: text, sourceApp: app) },
-            incoming: { [weak self] in self?.store.takeIncomingCopy() }
+            onCopy: { [weak self] text, app in
+                if let app, Prefs.ignoredApps.contains(app) { return }
+                _ = try? self?.store.add(text: text, sourceApp: app)
+            },
+            incoming: { [weak self] in
+                guard let self, let copy = store.takeIncomingCopy() else { return nil }
+                received(copy)
+                return copy.text
+            }
         )
         watcher.start()
 
-        popup = PopupController(store: store) { [weak self] clip in self?.paste(clip) }
-        hotKey = HotKey(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
-            self?.popup.toggle()
+        popup = PopupController(store: store, syncStatus: { [weak self] in self?.syncStatus() }) { [weak self] clip in
+            self?.paste(clip)
         }
-        setUpStatusItem()
-        if #available(macOS 15.4, *), NSPasteboard.general.accessBehavior != .alwaysAllow {
-            askForClipboardAccess()
-        }
-    }
+        hotKey = HotKey(Prefs.shortcut) { [weak self] in self?.popup.toggle() }
 
-    /// Since macOS 15.4 the system prompts on every programmatic clipboard read
-    /// unless the user sets the app to Always Allow, which a clipboard manager needs.
-    @objc private func askForClipboardAccess() {
-        let alert = NSAlert()
-        alert.messageText = "Let Holt see what you copy"
-        alert.informativeText = """
-            macOS asks before an app reads the clipboard. To keep your history, \
-            set Holt to Always Allow in Privacy & Security → Paste from Other Apps.
-            """
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Later")
-        NSApp.activate()
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        settings = SettingsWindow(model: SettingsModel(
+            node: node,
+            onShortcutChange: { [weak self] in self?.hotKey.register($0) },
+            onHistoryChange: { [weak self] in self?.prune() },
+            onClear: { [weak self] in try? self?.store.clear() }
+        ))
 
-        // Holt only shows up in that list after its first access prompt.
-        if #available(macOS 15.4, *), NSPasteboard.general.accessBehavior == .default {
-            _ = NSPasteboard.general.string(forType: .string)
-        }
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Pasteboard")!)
-    }
-
-    private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Holt")
-
+        statusItem.button?.image = Cairn.menuBarImage()
         let menu = NSMenu()
-        let open = NSMenuItem(title: "Open Holt", action: #selector(openPopup), keyEquivalent: "v")
-        open.keyEquivalentModifierMask = [.command, .shift]
+        menu.delegate = self
+        statusItem.menu = menu
+
+        // For development: `open build/Holt.app --args -HoltOpen settings`
+        // opens a window right away. Also devices and welcome.
+        switch UserDefaults.standard.string(forKey: "HoltOpen") {
+        case "settings": settings.show()
+        case "devices": settings.show(.devices)
+        case "welcome": showWelcome()
+        default:
+            if !Prefs.onboarded || !Permissions.clipboard {
+                showWelcome()
+            }
+        }
+    }
+
+    // MARK: Menu
+
+    /// Rebuilt each time it opens, so sync status and recent clips are current.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+
+        if let sync = syncStatus() {
+            let item = NSMenuItem(title: sync.label, action: sync.connected ? nil : #selector(openDevices), keyEquivalent: "")
+            item.image = dot(sync.connected ? .systemGreen : .tertiaryLabelColor)
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
+
+        let recent = (try? store.search(query: "", limit: 5)) ?? []
+        if !recent.isEmpty {
+            menu.addItem(.sectionHeader(title: "Recent"))
+            for clip in recent {
+                let title = oneLine(clip.text)
+                let item = NSMenuItem(title: title.count > 44 ? String(title.prefix(43)) + "…" : title, action: #selector(copyRecent(_:)), keyEquivalent: "")
+                item.representedObject = clip.text
+                item.image = AppInfo.icon(clip.sourceApp).map(resized) ?? symbol("doc.on.clipboard")
+                item.toolTip = clip.text.count > 44 ? String(clip.text.prefix(400)) : nil
+                menu.addItem(item)
+            }
+            menu.addItem(.separator())
+        }
+
+        let open = NSMenuItem(title: "Open Holt", action: #selector(openPopup), keyEquivalent: Prefs.shortcut.key.lowercased())
+        open.keyEquivalentModifierMask = Prefs.shortcut.eventModifiers
+        open.image = symbol("magnifyingglass")
         menu.addItem(open)
-        let devices = NSMenuItem(title: "Devices…", action: #selector(openDevices), keyEquivalent: "")
-        devices.isEnabled = node != nil
-        menu.addItem(devices)
-        menu.addItem(NSMenuItem(title: "Clipboard Access…", action: #selector(askForClipboardAccess), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Enable Auto-Paste…", action: #selector(askForAccessibility), keyEquivalent: ""))
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.image = symbol("gearshape")
+        menu.addItem(settingsItem)
+        if !Permissions.clipboard {
+            let warning = NSMenuItem(title: "Allow Clipboard Access…", action: #selector(showWelcome), keyEquivalent: "")
+            warning.image = symbol("exclamationmark.triangle")
+            menu.addItem(warning)
+        }
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Clear History…", action: #selector(clearHistory), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Quit Holt", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        for item in menu.items where item.action != #selector(NSApplication.terminate(_:)) {
+        let quit = NSMenuItem(title: "Quit Holt", action: #selector(quit), keyEquivalent: "q")
+        quit.image = symbol("power")
+        menu.addItem(quit)
+
+        for item in menu.items where item.action != nil {
             item.target = self
         }
-        statusItem.menu = menu
     }
 
     @objc private func openPopup() { popup.show() }
+    @objc private func openSettings() { settings.show() }
+    @objc private func openDevices() { settings.show(.devices) }
+    @objc private func quit() { NSApp.terminate(nil) }
 
-    @objc private func openDevices() {
-        guard let node else { return }
-        if devicesWindow == nil { devicesWindow = DevicesWindow(node: node) }
-        devicesWindow?.show()
+    @objc private func showWelcome() {
+        if welcome == nil {
+            welcome = WelcomeWindow(settings: settings.model) { [weak self] in self?.openDevices() }
+        }
+        welcome?.show()
     }
 
-    @objc private func askForAccessibility() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+    @objc private func copyRecent(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        watcher.put(text)
+        _ = try? store.add(text: text, sourceApp: nil)
     }
 
-    @objc private func clearHistory() {
-        let alert = NSAlert()
-        alert.messageText = "Clear clipboard history?"
-        alert.informativeText = "Pinned clips are kept."
-        alert.addButton(withTitle: "Clear")
-        alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        if alert.runModal() == .alertFirstButtonReturn {
-            try? store.clear()
+    // MARK: Sync
+
+    private func syncStatus() -> SyncStatus? {
+        guard let node else { return SyncStatus(label: "Sync is off", connected: false) }
+        let devices = (try? node.devices()) ?? []
+        guard !devices.isEmpty else { return nil }
+        let online = devices.filter(\.online)
+        switch online.count {
+        case 0: return SyncStatus(label: "Not connected to \(devices.count == 1 ? devices[0].name : "your Macs")", connected: false)
+        case 1: return SyncStatus(label: "Synced with \(online[0].name)", connected: true)
+        default: return SyncStatus(label: "Synced with \(online.count) Macs", connected: true)
         }
     }
+
+    private func received(_ copy: IncomingCopy) {
+        popup.refresh()
+        if Prefs.showArrivals, !popup.isVisible {
+            let anchor = statusItem.button.flatMap { button in button.window?.convertToScreen(button.convert(button.bounds, to: nil)) }
+            toast.show(copy, under: anchor)
+        }
+    }
+
+    // MARK: Paste
 
     private func paste(_ clip: Clip) {
         popup.close()
@@ -143,16 +203,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Without Accessibility access the clip is still on the clipboard,
         // the user just presses ⌘V themselves.
-        guard AXIsProcessTrusted() else {
+        guard Permissions.autoPaste else {
             if !askedForAccessibility {
                 askedForAccessibility = true
-                askForAccessibility()
+                Permissions.requestAutoPaste()
             }
             return
         }
         // The popup never activates Holt, so the app the user was in is still
         // frontmost and receives the keystroke.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { sendPasteKeystroke() }
+    }
+
+    private func prune() {
+        _ = try? store.prune(maxAgeDays: UInt32(max(Prefs.historyDays, 1)), maxUnpinned: 5000)
+    }
+
+    // MARK: Helpers
+
+    private func symbol(_ name: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)
+    }
+
+    private func dot(_ color: NSColor) -> NSImage? {
+        symbol("circle.fill")?.withSymbolConfiguration(.init(pointSize: 8, weight: .regular).applying(.init(paletteColors: [color])))
+    }
+
+    private func resized(_ image: NSImage) -> NSImage {
+        let copy = image.copy() as! NSImage
+        copy.size = NSSize(width: 16, height: 16)
+        return copy
     }
 
     /// The name set in System Settings → General → Sharing, like "Lucas's MacBook Pro".

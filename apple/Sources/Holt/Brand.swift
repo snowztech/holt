@@ -30,6 +30,67 @@ extension Color {
     }
 }
 
+/// Holt's mark: a cairn of three pebbles, the clips you kept. Drawn on an 18×18
+/// grid with y going up, so it maps straight onto a menu bar template image.
+enum Cairn {
+    struct Stone {
+        let rect: CGRect
+        /// Tilt in degrees, counterclockwise.
+        let tilt: CGFloat
+    }
+
+    static let stones = [
+        Stone(rect: CGRect(x: 1.5, y: 1.2, width: 15, height: 5.2), tilt: 0),
+        Stone(rect: CGRect(x: 3.8, y: 7.3, width: 10.4, height: 4.5), tilt: -4),
+        Stone(rect: CGRect(x: 6.4, y: 12.6, width: 6.2, height: 4), tilt: 6),
+    ]
+
+    static func menuBarImage() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            NSColor.black.setFill()
+            for stone in stones {
+                let path = NSBezierPath(ovalIn: CGRect(x: -stone.rect.width / 2, y: -stone.rect.height / 2,
+                                                       width: stone.rect.width, height: stone.rect.height))
+                var transform = AffineTransform(translationByX: stone.rect.midX, byY: stone.rect.midY)
+                transform.rotate(byDegrees: stone.tilt)
+                path.transform(using: transform)
+                path.fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Holt"
+        return image
+    }
+}
+
+/// The cairn as a view. `lift` raises the top stone, so animating it to 0 drops
+/// a new pebble onto the stack.
+struct CairnMark: View, Animatable {
+    var lift: Double = 0
+
+    var animatableData: Double {
+        get { lift }
+        set { lift = newValue }
+    }
+
+    var body: some View {
+        Canvas { ctx, size in
+            let scale = min(size.width, size.height) / 18
+            for (index, stone) in Cairn.stones.enumerated() {
+                var c = ctx
+                let raise = index == Cairn.stones.count - 1 ? lift : 0
+                // Flip to SwiftUI's y-down space.
+                c.translateBy(x: stone.rect.midX * scale, y: (18 - stone.rect.midY - raise) * scale)
+                c.rotate(by: .degrees(-stone.tilt))
+                let w = stone.rect.width * scale, h = stone.rect.height * scale
+                c.fill(Path(ellipseIn: CGRect(x: -w / 2, y: -h / 2, width: w, height: h)), with: .foreground)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+}
+
 /// Skip the otter, holding a pebble. Same shapes as the logo SVG, on a 200×200 grid.
 struct Skip: View {
     var body: some View {

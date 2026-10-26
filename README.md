@@ -38,7 +38,7 @@ History lives in `~/Library/Application Support/Holt/holt.db`. Unpinned clips ar
 
 ## Sync
 
-Open **Devices…** from the menu bar on both Macs. Each shows a 6-digit code and lists the other under Nearby. On one Mac, pick the other and type the code it shows.
+Open **Settings → Devices** in Holt on both Macs. Each shows a 6-digit code and lists the other under Nearby. On one Mac, pick the other and type the code it shows.
 
 After that the Macs stay connected:
 

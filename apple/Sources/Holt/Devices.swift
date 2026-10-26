@@ -92,37 +92,6 @@ final class DevicesModel: ObservableObject {
     }
 }
 
-@MainActor
-final class DevicesWindow: NSObject, NSWindowDelegate {
-    private let model: DevicesModel
-    private var window: NSWindow?
-
-    init(node: Node) {
-        model = DevicesModel(node: node)
-    }
-
-    func show() {
-        if window == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: DevicesView(model: model)))
-            window.title = "Devices"
-            window.styleMask = [.titled, .closable]
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            self.window = window
-        }
-        if window?.isVisible != true {
-            model.open()
-            window?.center()
-        }
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        model.close()
-    }
-}
-
 struct DevicesView: View {
     @ObservedObject var model: DevicesModel
 
@@ -131,7 +100,7 @@ struct DevicesView: View {
             HStack(spacing: 14) {
                 Skip().frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Devices").font(.system(size: 22, weight: .bold, design: .rounded))
+                    Text("Sync your Macs").font(.system(size: 22, weight: .bold, design: .rounded))
                     Text("What you copy on one device shows up on the others.")
                         .foregroundStyle(.secondary)
                 }
@@ -166,7 +135,7 @@ struct DevicesView: View {
                             .foregroundStyle(Brand.river)
                             .textSelection(.enabled)
                     }
-                    Text("On your other Mac, open Devices in Holt, pick this Mac below, and type this code.")
+                    Text("On your other Mac, open Holt Settings → Devices, pick this Mac under Nearby, and type this code.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -179,7 +148,7 @@ struct DevicesView: View {
                 if model.nearby.isEmpty {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Looking for Macs on this network with Devices open…").foregroundStyle(.secondary)
+                        Text("Looking for Macs on this network with this tab open…").foregroundStyle(.secondary)
                     }
                 } else {
                     ForEach(model.nearby) { device in
@@ -194,7 +163,7 @@ struct DevicesView: View {
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
