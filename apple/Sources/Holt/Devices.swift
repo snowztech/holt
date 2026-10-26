@@ -98,7 +98,7 @@ struct DevicesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 14) {
-                Skip().frame(width: 56, height: 56)
+                Skip().frame(width: 68, height: 68)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Sync your Macs").font(.system(size: 22, weight: .bold, design: .rounded))
                     Text("What you copy on one device shows up on the others.")

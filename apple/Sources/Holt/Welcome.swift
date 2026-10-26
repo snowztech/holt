@@ -49,7 +49,7 @@ private struct WelcomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Skip().frame(width: 104, height: 104)
+            Skip().frame(width: 128, height: 128)
             Text("Welcome to Holt")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .padding(.top, 14)

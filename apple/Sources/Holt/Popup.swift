@@ -399,7 +399,7 @@ private struct EmptyState: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Skip().frame(width: 92, height: 92)
+            Skip().frame(width: 112, height: 112)
             Text(query.isEmpty ? "Skip has nothing yet" : "No clips match “\(query)”")
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
             Text(query.isEmpty ? "Copy something and it shows up here." : "Try fewer words, or part of a word.")

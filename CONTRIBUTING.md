@@ -79,5 +79,9 @@ CI runs lint, tests and a full app build on every pull request.
 ## Design notes
 
 - Holt should feel like part of macOS: system font, native controls, river teal as the one accent color.
-- Skip the otter is the identity. The small mark is Skip's face (menu bar, search field, the site). The full Skip shows up for bigger moments: onboarding, empty states, the app icon.
+- Skip the otter is the identity, in three forms:
+  - the full Skip, holding a pebble: app icon, welcome window, empty states, About
+  - Skip's face in color: the logo on the site, the favicon
+  - Skip's face in one color (`Mark` in `Brand.swift`): the menu bar and the search field, where macOS wants a template icon
+- All three share the same otter features: small ears low on a wide head, a two-lobed muzzle, whiskers. Keep them in sync when one changes.
 - Write copy for people, not engineers: "Paste for you", not "Accessibility permission".

@@ -19,6 +19,6 @@ For GitHub Pages from this repo: Settings → Pages → Source: GitHub Actions, 
 ## Notes
 
 - The hero popup is HTML, not a screenshot, so it stays sharp and follows the light and dark theme. It mirrors `apple/Sources/Holt/Popup.swift`; update it when the app's look changes.
-- The otter mark and Skip are inline SVG, the same shapes the app draws in `Brand.swift`.
+- Skip (`#skip`), Skip's face for the logo (`#skip-face`) and the one-color mark (`#mark`) are inline SVG, the same shapes the app draws in `Brand.swift`.
 - `assets/popup-dark.png` and `popup-light.png` are the README picture: the hero popup rendered at 2x in headless Chrome.
 - `assets/icon-512.png` comes from `make icon` in the repo root (`build/icon-1024.png`, resized).

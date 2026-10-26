@@ -118,42 +118,46 @@ struct Skip: View {
                 ctx.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .round))
             }
 
-            oval(46, 60, 16, 16, Brand.fur)
-            oval(154, 60, 16, 16, Brand.fur)
-            oval(46, 60, 7, 7, Brand.furDark)
-            oval(154, 60, 7, 7, Brand.furDark)
-            oval(100, 104, 72, 63, Brand.fur)
-            oval(100, 130, 48, 34, Brand.muzzle)
-            oval(72, 98, 8.5, 9.5, Brand.eye)
-            oval(128, 98, 8.5, 9.5, Brand.eye)
-            oval(75, 94.5, 2.8, 2.8, .white)
-            oval(131, 94.5, 2.8, 2.8, .white)
+            // Small ears low on the sides of a wide head, like the menu bar mark.
+            oval(35, 86, 14, 14, Brand.fur)
+            oval(165, 86, 14, 14, Brand.fur)
+            oval(35, 86, 6, 6, Brand.furDark)
+            oval(165, 86, 6, 6, Brand.furDark)
+            oval(100, 110, 78, 58, Brand.fur)
+            // Two-lobed muzzle.
+            oval(100, 132, 40, 22, Brand.muzzle)
+            oval(82, 137, 23, 23, Brand.muzzle)
+            oval(118, 137, 23, 23, Brand.muzzle)
+            oval(70, 101, 8.5, 9.5, Brand.eye)
+            oval(130, 101, 8.5, 9.5, Brand.eye)
+            oval(73, 97.5, 2.8, 2.8, .white)
+            oval(133, 97.5, 2.8, 2.8, .white)
 
             var nose = Path()
-            nose.move(to: CGPoint(x: 88, y: 113))
-            nose.addQuadCurve(to: CGPoint(x: 112, y: 113), control: CGPoint(x: 100, y: 104))
-            nose.addQuadCurve(to: CGPoint(x: 100, y: 124), control: CGPoint(x: 112, y: 122))
-            nose.addQuadCurve(to: CGPoint(x: 88, y: 113), control: CGPoint(x: 88, y: 122))
+            nose.move(to: CGPoint(x: 87, y: 117))
+            nose.addQuadCurve(to: CGPoint(x: 113, y: 117), control: CGPoint(x: 100, y: 108))
+            nose.addQuadCurve(to: CGPoint(x: 100, y: 128), control: CGPoint(x: 113, y: 126))
+            nose.addQuadCurve(to: CGPoint(x: 87, y: 117), control: CGPoint(x: 87, y: 126))
             ctx.fill(nose, with: .color(Brand.eye))
 
             line(
                 { p in
-                    p.move(to: CGPoint(x: 100, y: 124)); p.addLine(to: CGPoint(x: 100, y: 131))
-                    p.addQuadCurve(to: CGPoint(x: 84, y: 133), control: CGPoint(x: 92, y: 139))
-                    p.move(to: CGPoint(x: 100, y: 131))
-                    p.addQuadCurve(to: CGPoint(x: 116, y: 133), control: CGPoint(x: 108, y: 139))
+                    p.move(to: CGPoint(x: 100, y: 128)); p.addLine(to: CGPoint(x: 100, y: 134))
+                    p.addQuadCurve(to: CGPoint(x: 85, y: 137), control: CGPoint(x: 92, y: 142))
+                    p.move(to: CGPoint(x: 100, y: 134))
+                    p.addQuadCurve(to: CGPoint(x: 115, y: 137), control: CGPoint(x: 108, y: 142))
                 }, Brand.eye, 3)
             line(
                 { p in
-                    for (from, to) in [((62, 124), (34, 118)), ((62, 131), (33, 133)), ((138, 124), (166, 118)), ((138, 131), (167, 133))] {
+                    for (from, to) in [((60, 131), (26, 124)), ((60, 139), (25, 141)), ((140, 131), (174, 124)), ((140, 139), (175, 141))] {
                         p.move(to: CGPoint(x: from.0, y: from.1)); p.addLine(to: CGPoint(x: to.0, y: to.1))
                     }
-                }, Brand.furDark, 2.2)
+                }, Brand.furDark, 2.4)
 
-            oval(100, 174, 24, 15, Brand.pebble)
-            oval(93, 169, 7, 3.5, .white.opacity(0.35))
-            oval(77, 171, 11, 9, Brand.furDark)
-            oval(123, 171, 11, 9, Brand.furDark)
+            oval(100, 177, 24, 15, Brand.pebble)
+            oval(93, 172, 7, 3.5, .white.opacity(0.35))
+            oval(77, 174, 11, 9, Brand.furDark)
+            oval(123, 174, 11, 9, Brand.furDark)
         }
         .aspectRatio(1, contentMode: .fit)
     }
@@ -167,7 +171,7 @@ struct AppIcon: View {
                 .fill(LinearGradient(colors: [Color(hex: 0x1A8A82), Color(hex: 0x0B5450)], startPoint: .top, endPoint: .bottom))
                 .frame(width: 824, height: 824)
                 .shadow(color: .black.opacity(0.3), radius: 18, y: 10)
-            Skip().frame(width: 720, height: 720).offset(y: 12)
+            Skip().frame(width: 780, height: 780).offset(y: -98)
         }
         .frame(width: 1024, height: 1024)
     }

@@ -226,7 +226,7 @@ private struct HistoryTab: View {
 private struct AboutTab: View {
     var body: some View {
         VStack(spacing: 10) {
-            Skip().frame(width: 96, height: 96)
+            Skip().frame(width: 120, height: 120)
             Text("Holt").font(.system(size: 26, weight: .bold, design: .rounded))
             Text("Your clipboard, kept.").foregroundStyle(.secondary)
             Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
