@@ -71,6 +71,21 @@ final class Spike {
         }
     }
 
+    /// Records the clip, then waits for a paired Mac to connect so it leaves before iOS
+    /// suspends Holt. Returns whether a Mac was connected.
+    func send(_ text: String) async throws -> Bool {
+        _ = try store.add(text: text, sourceApp: nil)
+        for _ in 0..<100 {
+            if (try? node?.devices())?.contains(where: \.online) == true {
+                // The core has no delivery receipt yet, so give the sync session a moment to write.
+                try await Task.sleep(for: .milliseconds(400))
+                return true
+            }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        return false
+    }
+
     func tick() {
         clips = (try? store.search(query: "", limit: 50)) ?? []
         for clip in clips where clip.device != nil && seen.insert(clip.id).inserted {
@@ -152,25 +167,41 @@ struct SendToHolt: AppIntent {
         let spike = Spike.shared
         let start = Date()
         spike.note("intent: started")
-        _ = try spike.store.add(text: text, sourceApp: nil)
-        // Wait for a paired Mac to connect, so the clip leaves before iOS suspends Holt.
-        var connected = false
-        for _ in 0..<100 {
-            if (try? spike.node?.devices())?.contains(where: \.online) == true {
-                connected = true
-                break
-            }
-            try await Task.sleep(for: .milliseconds(100))
-        }
-        // The core has no delivery receipt yet, so give the sync session a moment to write.
-        try await Task.sleep(for: .milliseconds(400))
+        let connected = try await spike.send(text)
         spike.note("intent: done in \(ms(since: start)) ms, connected: \(connected)")
+        return .result(dialog: connected ? "Sent to your Mac" : "Saved. It goes to your Mac when it's reachable.")
+    }
+}
+
+/// The zero-setup way: installed with the app, in Spotlight, Siri, Shortcuts and the
+/// Action Button. It reads the clipboard itself, so iOS asks "Allow Paste?" unless the
+/// user sets Settings → Holt → Paste from Other Apps → Allow.
+struct SendClipboardToHolt: AppIntent {
+    static let title: LocalizedStringResource = "Send Clipboard to Holt"
+    static let description = IntentDescription("Sends what you copied to your paired Macs.")
+    static let openAppWhenRun = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let spike = Spike.shared
+        let start = Date()
+        spike.note("clipboard intent: started")
+        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+            spike.note("clipboard intent: nothing to send, or paste not allowed (\(ms(since: start)) ms)")
+            return .result(dialog: "There's no text on the clipboard.")
+        }
+        spike.note("clipboard intent: read the clipboard in \(ms(since: start)) ms")
+        let connected = try await spike.send(text)
+        spike.note("clipboard intent: done in \(ms(since: start)) ms, connected: \(connected)")
         return .result(dialog: connected ? "Sent to your Mac" : "Saved. It goes to your Mac when it's reachable.")
     }
 }
 
 struct HoltShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: SendClipboardToHolt(), phrases: ["Send clipboard to \(.applicationName)"],
+            shortTitle: "Send Clipboard", systemImageName: "doc.on.clipboard")
         AppShortcut(
             intent: SendToHolt(), phrases: ["Send to \(.applicationName)"], shortTitle: "Send to Holt", systemImageName: "paperplane")
     }

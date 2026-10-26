@@ -24,11 +24,19 @@ failing to start. The iPhone pairs by QR code, which carries the Mac's id direct
 
 Pairing found the peer through iroh's internet discovery, without mDNS.
 
-## 3. Sending from Back Tap (needs a real iPhone)
+## 3. Sending from the iPhone (needs a real iPhone)
 
-A Shortcut runs Get Clipboard, then the app's "Send to Holt" action with that text. Holt
-never reads the clipboard itself, so iOS shows no paste prompt. Still to measure on a
-phone: whether the action connects and sends before iOS suspends the app.
+iOS never tells an app that something was copied, so "copy and it's on the Mac" isn't
+possible. The closest is copy, then one press. The app ships two actions:
+
+- **Send Clipboard to Holt** reads the clipboard itself. It installs with the app, with
+  no setup: Spotlight, Siri, the Shortcuts app, and the Action Button. iOS asks "Allow
+  Paste?" each time unless the user sets Settings → Holt → Paste from Other Apps → Allow.
+- **Send to Holt** takes text, for a Shortcut that runs Get Clipboard first. No paste
+  prompt, but the user builds the shortcut, or adds ours from a link.
+
+Still to measure on a phone: whether each action connects and sends before iOS suspends
+Holt, and whether Back Tap can pick an App Shortcut directly or only a library shortcut.
 
 ## 4. Receiving on the phone (needs a real iPhone)
 
