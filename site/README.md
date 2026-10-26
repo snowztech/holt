@@ -22,3 +22,4 @@ It's served at https://holt.snowztech.com: a CNAME record `holt` → `snowztech.
 - Skip (`#skip`) and Skip's face, the logo (`#skip-face`), are inline SVG, the same shapes the app draws from `SkipFace` in `Brand.swift`.
 - `assets/readme-hero-dark.png` and `readme-hero-light.png` are the README picture: the hero popup rendered 720 CSS pixels wide at 2x in headless Chrome, with a transparent background. The README shows it at `width="720"`, so it's never scaled.
 - `assets/icon-512.png` comes from `make icon` in the repo root (`build/icon-1024.png`, resized).
+- `assets/og.png` is the 1280×640 share image, for link previews and the GitHub social preview. It's the logo, the headline and the hero popup, rendered in headless Chrome.
