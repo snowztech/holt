@@ -2,7 +2,8 @@
 # Builds a signed, notarized build/Holt-<version>.dmg that opens on any Apple Silicon Mac without warnings.
 # Needs a Developer ID Application certificate and a notarytool keychain profile
 # (the same one Farol uses works: `xcrun notarytool store-credentials farol`).
-# NOTARIZE=0 signs without notarizing.
+# CI passes an App Store Connect API key instead: NOTARY_KEY_PATH, NOTARY_KEY_ID, NOTARY_ISSUER_ID.
+# VERSION=0.2.0 stamps that version into the app. NOTARIZE=0 signs without notarizing.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,6 +13,9 @@ identity="${DEVELOPER_ID:-$(security find-identity -v -p codesigning | sed -n 's
 
 make -C "$root" mac
 app="$root/build/Holt.app"
+if [ -n "${VERSION:-}" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $VERSION" "$app/Contents/Info.plist"
+fi
 version=$(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString)
 dmg="$root/build/Holt-$version.dmg"
 zip="$root/build/Holt-$version.zip"
@@ -22,7 +26,11 @@ codesign --verify --strict --deep "$app"
 echo "signed with $identity"
 
 notarize() {
-    xcrun notarytool submit "$1" --keychain-profile "$profile" --wait
+    if [ -n "${NOTARY_KEY_PATH:-}" ]; then
+        xcrun notarytool submit "$1" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+    else
+        xcrun notarytool submit "$1" --keychain-profile "$profile" --wait
+    fi
 }
 
 # The disk image: the app next to a link to /Applications, to drag it across.

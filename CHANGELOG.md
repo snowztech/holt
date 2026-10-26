@@ -1,0 +1,23 @@
+# Changelog
+
+Notable changes to Holt. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-10-26
+
+The first release. Holt keeps everything you copy on your Mac, and pairs your Macs so a copy on one is a paste on the other.
+
+### Added
+
+- Press ⇧⌘V to open Holt, type to search everything you copied, and press return to paste it into the app you were in. Every word you type has to match.
+- Pin clips you reuse. Pinned clips stay at the top and never expire.
+- ⌘1 to ⌘9 paste one of the first nine clips. Hold ⌘ to see the numbers.
+- Pair your Macs in Settings → Devices with a 6-digit code. Copies, pins and deletes sync between them, over the same Wi-Fi or across the internet, end-to-end encrypted.
+- A clip copied on another Mac in the last 2 minutes goes straight onto this Mac's clipboard, with a small notice saying where it came from.
+- Copies that password managers mark as private are never recorded, and you can tell Holt to ignore any app.
+- A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
+- Settings to change the shortcut and choose how long to keep history.
+
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/snowztech/holt/releases/tag/v0.1.0
