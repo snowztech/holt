@@ -136,15 +136,22 @@ private struct DevicesTab: View {
 private struct GeneralTab: View {
     @ObservedObject var model: SettingsModel
     @AppStorage(Prefs.showArrivalsKey) private var showArrivals = true
+    @AppStorage(Prefs.appearanceKey) private var appearance = "system"
 
     var body: some View {
         Form {
             Section {
+                Picker("Appearance", selection: $appearance) {
+                    Text("System").tag("system")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                }
+                .onChange(of: appearance) { Prefs.applyAppearance() }
                 LabeledContent("Open Holt with") {
                     ShortcutRecorder(shortcut: $model.shortcut)
                 }
                 Toggle("Open Holt at login", isOn: $model.launchAtLogin)
-                Toggle("Show a notice when a clip arrives from another Mac", isOn: $showArrivals)
+                Toggle("Show clips arriving from other devices", isOn: $showArrivals)
             }
             Section("Permissions") {
                 PermissionRow(
@@ -164,7 +171,7 @@ private struct GeneralTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 330)
+        .frame(height: 368)
     }
 }
 

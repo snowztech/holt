@@ -8,6 +8,7 @@ enum Prefs {
     static let ignoredAppsKey = "ignoredApps"
     static let showArrivalsKey = "showArrivals"
     static let onboardedKey = "onboarded"
+    static let appearanceKey = "appearance"
 
     private static var defaults: UserDefaults { .standard }
 
@@ -16,6 +17,15 @@ enum Prefs {
     }
 
     static var historyDays: Int { defaults.integer(forKey: historyDaysKey) }
+
+    /// "system", "light" or "dark", applied to every Holt window.
+    static func applyAppearance() {
+        switch defaults.string(forKey: appearanceKey) {
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        default: NSApp.appearance = nil
+        }
+    }
     static var showArrivals: Bool { defaults.bool(forKey: showArrivalsKey) }
 
     static var onboarded: Bool {

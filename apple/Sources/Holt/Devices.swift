@@ -109,25 +109,28 @@ final class DevicesModel: ObservableObject {
 
 struct DevicesView: View {
     @ObservedObject var model: DevicesModel
+    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 14) {
                 Skip().frame(width: 68, height: 68)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Sync your Macs").font(.system(size: 22, weight: .bold, design: .rounded))
+                    Text("Sync your devices").font(.system(size: 22, weight: .bold, design: .rounded))
                     Text("What you copy on one device shows up on the others.")
                         .foregroundStyle(.secondary)
                 }
             }
 
-            section("YOUR DEVICES") {
+            section("Your devices") {
                 if model.devices.isEmpty {
                     Text("No devices yet. Pair one below.").foregroundStyle(.secondary)
                 } else {
                     ForEach(model.devices) { device in
                         HStack(spacing: 10) {
-                            Image(systemName: "laptopcomputer").frame(width: 22)
+                            // iOS reports every iPhone's name as "iPhone".
+                            Image(systemName: device.name.localizedCaseInsensitiveContains("iphone") ? "iphone" : "laptopcomputer")
+                                .frame(width: 22)
                             Text(device.name)
                             Spacer()
                             Circle().fill(device.online ? Color.green : Color.secondary.opacity(0.4)).frame(width: 7, height: 7)
@@ -141,7 +144,7 @@ struct DevicesView: View {
                 }
             }
 
-            section("PAIR A NEW DEVICE") {
+            section("Pair a new device") {
                 HStack(alignment: .center, spacing: 20) {
                     if let qr = qrCode(model.pairingLink) {
                         Image(nsImage: qr)
@@ -155,13 +158,26 @@ struct DevicesView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("This Mac's code").font(.callout).foregroundStyle(.secondary)
-                            Text(spaced(model.code))
-                                .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
-                                .foregroundStyle(Brand.river)
-                                .textSelection(.enabled)
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(spaced(model.code))
+                                    .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
+                                    .foregroundStyle(Brand.river)
+                                    .textSelection(.enabled)
+                                Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(model.code, forType: .string)
+                                    copied = true
+                                    Task {
+                                        try? await Task.sleep(for: .seconds(1.5))
+                                        copied = false
+                                    }
+                                }
+                                .controlSize(.small)
+                                .disabled(model.code.isEmpty)
+                            }
                         }
                         Text(
-                            "iPhone: point the Camera at the code. Other Mac: open Holt Settings → Devices, pick this Mac under Nearby, and type the number."
+                            "On your iPhone, open Holt and scan this code. On another Mac, pick this Mac under Nearby and type the code."
                         )
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -229,7 +245,7 @@ struct DevicesView: View {
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
             content()
         }

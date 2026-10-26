@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Prefs.registerDefaults()
+        Prefs.applyAppearance()
         do {
             store = try Store.open(path: Self.databasePath())
         } catch {

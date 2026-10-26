@@ -4,6 +4,15 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+### Added
+
+- Choose Light, Dark or System in Settings → General.
+- Settings → Devices has a Copy button for the pairing code, and a QR code an iPhone can scan.
+
+### Changed
+
+- Settings → Devices covers every device you pair, and shows an iPhone icon for iPhones.
+
 ## [0.1.1] - 2026-10-26
 
 Holt now keeps itself up to date.
