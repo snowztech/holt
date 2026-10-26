@@ -256,12 +256,13 @@ impl Inner {
         self.endpoint.set_user_data_for_address_lookup(None);
     }
 
-    /// Keeps a connection to `peer` open, reconnecting with backoff. Only the
-    /// device with the smaller id dials, so a pair never opens two sessions.
+    /// Keeps a connection to `peer` open, reconnecting with backoff. Both devices
+    /// dial, so whichever one restarts (an iPhone app, often) reconnects right away
+    /// instead of waiting out the other's backoff. Neither dials while a session is
+    /// open, and the device with the larger id waits a second first, so they rarely
+    /// open two. If they do, both sync the same rows, which is harmless.
     fn ensure_dialer(self: &Arc<Self>, peer: EndpointId) {
-        if self.endpoint.id().as_bytes() >= peer.as_bytes() {
-            return;
-        }
+        let defer = self.endpoint.id().as_bytes() > peer.as_bytes();
         let mut dialers = self.dialers.lock().unwrap();
         if dialers.contains_key(&peer) {
             return;
@@ -272,6 +273,14 @@ impl Inner {
             tokio::spawn(async move {
                 let mut backoff = 1;
                 loop {
+                    if defer {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    if inner.is_online(peer) {
+                        backoff = 1;
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        continue;
+                    }
                     if let Ok(conn) = inner.endpoint.connect(peer, SYNC_ALPN).await {
                         backoff = 1;
                         let _ = sync_session(inner.clone(), conn, true).await;
@@ -281,6 +290,14 @@ impl Inner {
                 }
             }),
         );
+    }
+
+    fn is_online(&self, peer: EndpointId) -> bool {
+        self.online
+            .lock()
+            .unwrap()
+            .get(&peer)
+            .is_some_and(|n| *n > 0)
     }
 
     fn set_online(&self, peer: EndpointId, delta: isize) {
@@ -680,6 +697,49 @@ mod tests {
         let id = a.inner.store.search("from b".into(), 1).unwrap()[0].id;
         a.inner.store.delete(id).unwrap();
         wait_until("b to drop the deleted clip", || texts(&b) == ["from a"]);
+    }
+
+    /// An iPhone app restarts often. It has to reconnect on its own, without
+    /// waiting out the other device's backoff, whichever of the two has the larger id.
+    #[test]
+    fn a_restarted_device_reconnects_right_away() {
+        let (a, b) = (node("Mac A"), node("iPhone"));
+        a.inner.memory.add_endpoint_info(b.inner.endpoint.addr());
+        b.inner.memory.add_endpoint_info(a.inner.endpoint.addr());
+        b.pair(a.device_id(), a.start_pairing()).unwrap();
+        wait_until("a and b to connect", || {
+            a.devices().unwrap().iter().any(|d| d.online)
+        });
+
+        // Restart the one that used to wait to be dialed.
+        let (stays, restarts) = if a.device_id() < b.device_id() {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        let store = restarts.inner.store.clone();
+        drop(restarts);
+        // Long enough for the other side's backoff to grow past a few seconds.
+        std::thread::sleep(Duration::from_secs(8));
+
+        let restarted = Node::start_with(store, "iPhone".into(), true).unwrap();
+        stays
+            .inner
+            .memory
+            .add_endpoint_info(restarted.inner.endpoint.addr());
+        restarted
+            .inner
+            .memory
+            .add_endpoint_info(stays.inner.endpoint.addr());
+        let start = std::time::Instant::now();
+        wait_until("the restarted device to reconnect", || {
+            restarted.devices().unwrap().iter().any(|d| d.online)
+        });
+        assert!(
+            start.elapsed() < Duration::from_secs(4),
+            "took {:?}",
+            start.elapsed()
+        );
     }
 
     #[test]

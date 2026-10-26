@@ -13,6 +13,10 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 - Settings → Devices covers every device you pair, and shows an iPhone icon for iPhones.
 
+### Fixed
+
+- A device that restarts reconnects to the others right away, instead of waiting up to half a minute.
+
 ## [0.1.1] - 2026-10-26
 
 Holt now keeps itself up to date.
