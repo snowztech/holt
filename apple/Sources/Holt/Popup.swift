@@ -182,6 +182,8 @@ struct PopupView: View {
         }
         .frame(width: 720, height: 440)
         .background(.regularMaterial)
+        // Draw under the panel's hidden title bar instead of leaving a gap.
+        .ignoresSafeArea()
         .onChange(of: model.shown, initial: true) { searchFocused = true }
     }
 
