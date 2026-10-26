@@ -112,14 +112,14 @@
   <main>
     <section class="hero wrap">
       <div class="hero-copy">
-        <span class="sn-meta">Free and open source · macOS 14 and later</span>
+        <span class="sn-meta">Free and open source · macOS 14 · Apple Silicon</span>
         <h1>Your clipboard,<br />kept.</h1>
         <p class="lede">
           Holt remembers everything you copy. Press <kbd class="sn-kbd">⇧⌘V</kbd> to find it again,
           and pair your Macs so a copy on one is a paste on the other.
         </p>
         <div class="cta">
-          <a class="sn-btn sn-btn--accent sn-btn--lg" href="#install">Get Holt</a>
+          <a class="sn-btn sn-btn--accent sn-btn--lg" href="https://github.com/snowztech/holt/releases/latest/download/Holt.dmg">Download for Mac</a>
           <a class="sn-btn sn-btn--secondary sn-btn--lg" href="https://github.com/snowztech/holt" target="_blank" rel="noopener">View on GitHub</a>
         </div>
       </div>
@@ -262,19 +262,21 @@
       <div class="section-head">
         <span class="sn-meta">Install</span>
         <h2>Get Holt</h2>
-        <p>
-          The first signed download is on its way. <a href="https://github.com/snowztech/holt/releases" target="_blank" rel="noopener">Watch the releases</a> to hear when it ships.
-          Until then, building it takes one command with Xcode and Rust installed.
-        </p>
+        <p>Download Holt, open the disk image and drag Holt to Applications. It needs macOS 14 or later on Apple Silicon.</p>
       </div>
+      <div class="cta">
+        <a class="sn-btn sn-btn--accent sn-btn--lg" href="https://github.com/snowztech/holt/releases/latest/download/Holt.dmg">Download for Mac</a>
+        <a class="sn-btn sn-btn--secondary sn-btn--lg" href="https://github.com/snowztech/holt/releases" target="_blank" rel="noopener">All releases</a>
+      </div>
+      <p class="fine">Or with Homebrew:</p>
       <div class="install sn-card sn-card--rounded sn-card--inset">
-        <code id="install-cmd">git clone https://github.com/snowztech/holt &amp;&amp; cd holt &amp;&amp; make run</code>
-        <button class="sn-copy-btn" data-sn-copy="git clone https://github.com/snowztech/holt && cd holt && make run" aria-label="Copy command">
+        <code>brew install --cask snowztech/tap/holt</code>
+        <button class="sn-copy-btn" data-sn-copy="brew install --cask snowztech/tap/holt" aria-label="Copy command">
           <span class="sn-copy-btn__idle">copy</span>
           <span class="sn-copy-btn__copied">copied</span>
         </button>
       </div>
-      <p class="fine">On first launch, a short checklist walks you through the two macOS permissions Holt needs.</p>
+      <p class="fine">Releases are signed and notarized, so macOS opens Holt without warnings. On first launch, a short checklist walks you through the two permissions Holt needs. To build from source, see the <a href="https://github.com/snowztech/holt#install" target="_blank" rel="noopener">README</a>.</p>
     </section>
 
     <section class="wrap section">

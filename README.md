@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/snowztech/holt/actions/workflows/ci.yml"><img src="https://github.com/snowztech/holt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/snowztech/holt/releases/latest"><img src="https://img.shields.io/github/v/release/snowztech/holt?color=2E9C93&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2E9C93" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-2E9C93?logo=apple" alt="macOS 14 or later">
 </p>
@@ -32,15 +33,21 @@
 
 ## Install
 
-The first signed download comes with the first release. Until then, build it with one command:
+[Download Holt](https://github.com/snowztech/holt/releases/latest/download/Holt.dmg), open the disk image and drag Holt to Applications. Or with Homebrew:
+
+```sh
+brew install --cask snowztech/tap/holt
+```
+
+It needs macOS 14 or later on Apple Silicon. Releases are signed and notarized, so macOS opens Holt without warnings.
+
+To build from source instead, you need Xcode and Rust ([rustup.rs](https://rustup.rs)):
 
 ```sh
 git clone https://github.com/snowztech/holt
 cd holt
 make run
 ```
-
-You need macOS 14 or later, Xcode and Rust ([rustup.rs](https://rustup.rs)).
 
 On first launch, a short checklist walks you through setup:
 
@@ -85,7 +92,7 @@ Skip does the same with what you copy: keeps it safe, and skips it across to you
 
 - [x] Clipboard history on the Mac
 - [x] Sync between Macs
-- [ ] Signed download and Homebrew
+- [x] Signed download and Homebrew
 - [ ] iPhone app
 - [ ] Images, and search for the text inside screenshots
 - [ ] Windows and Linux
