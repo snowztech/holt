@@ -4,6 +4,10 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-27
+
+Holt for Mac is ready for the iPhone app, which is in testing now.
+
 ### Added
 
 - Choose Light, Dark or System in Settings → General.
@@ -41,6 +45,7 @@ The first release. Holt keeps everything you copy on your Mac, and pairs your Ma
 - A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
 - Settings to change the shortcut and choose how long to keep history.
 
-[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/snowztech/holt/releases/tag/v0.1.2
 [0.1.1]: https://github.com/snowztech/holt/releases/tag/v0.1.1
 [0.1.0]: https://github.com/snowztech/holt/releases/tag/v0.1.0
