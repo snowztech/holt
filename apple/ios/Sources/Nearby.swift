@@ -12,6 +12,8 @@ final class Nearby {
     }
 
     private(set) var macs: [Mac] = []
+    /// iOS reports a denied Local Network permission as a policy error on the browser.
+    private(set) var denied = false
     private var browser: NWBrowser?
 
     func start() {
@@ -26,6 +28,15 @@ final class Nearby {
                 return Mac(id: id, name: name)
             }
             Task { @MainActor in self?.macs = macs.sorted { $0.name < $1.name } }
+        }
+        browser.stateUpdateHandler = { [weak self] state in
+            let denied: Bool
+            if case .waiting(.dns(let code)) = state, code == DNSServiceErrorType(kDNSServiceErr_PolicyDenied) {
+                denied = true
+            } else {
+                denied = false
+            }
+            Task { @MainActor in self?.denied = denied }
         }
         browser.start(queue: .main)
         self.browser = browser
