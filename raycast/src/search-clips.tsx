@@ -80,7 +80,7 @@ function Detail({ clip, app }: { clip: Clip; app?: Application }) {
         <List.Item.Detail.Metadata>
           <List.Item.Detail.Metadata.Label title="Copied" text={new Date(clip.created_at).toLocaleString()} />
           {app && <List.Item.Detail.Metadata.Label title="App" text={app.name} />}
-          {clip.device && <List.Item.Detail.Metadata.Label title="Mac" text={clip.device} />}
+          {clip.device && <List.Item.Detail.Metadata.Label title="Device" text={clip.device} />}
         </List.Item.Detail.Metadata>
       }
     />
