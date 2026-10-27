@@ -79,6 +79,10 @@ On first launch, a short checklist walks you through setup:
 | ⌘⌫ | Delete, here and on your other Macs |
 | esc | Close |
 
+## Alfred
+
+With Alfred's Powerpack, [download the Holt workflow](https://github.com/snowztech/holt/releases/latest/download/Holt.alfredworkflow) and open it to install. Type `holt` and what you're looking for. Return pastes the clip, ⌘↩ copies it without pasting.
+
 ## Sync between Macs
 
 Open **Settings → Devices** in Holt on both Macs. Each one shows a 6-digit code and lists the other under Nearby. On one Mac, pick the other and type the code it shows.

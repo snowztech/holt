@@ -4,6 +4,10 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+### Added
+
+- An Alfred workflow. Type `holt` in Alfred to search your history and paste from it. It needs Alfred's Powerpack.
+
 ## [0.1.2] - 2026-10-27
 
 Holt for Mac is ready for the iPhone app, which is in testing now.

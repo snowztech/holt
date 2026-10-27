@@ -5,7 +5,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 # Ad-hoc signing ("-") works too, but macOS forgets the grant on every build.
 SIGN_ID ?= $(shell security find-identity -p codesigning -v | grep -m1 "Apple Development" | sed -E 's/.*"(.*)"/\1/')
 
-.PHONY: core core-ios bindings mac ios testflight icon run test lint fmt dist clean
+.PHONY: core core-ios bindings mac ios testflight icon run alfred test lint fmt dist clean
 
 # The Mac slice only, so Mac work stays fast. `make core-ios` adds iPhone and Simulator.
 core:
@@ -73,8 +73,17 @@ run: mac
 	-pkill -x Holt
 	open $(APP)
 
+# build/Holt.alfredworkflow, the Alfred workflow. Opening the file installs it in Alfred.
+alfred:
+	rm -rf build/alfred && mkdir -p build/alfred
+	cp alfred/info.plist alfred/search.sh build/alfred/
+	cp raycast/assets/extension-icon.png build/alfred/icon.png
+	rm -f build/Holt.alfredworkflow
+	cd build/alfred && zip -qr ../Holt.alfredworkflow .
+
 test:
 	cd core && cargo test
+	alfred/test.sh
 
 SWIFT_SOURCES := apple/Sources/Holt apple/ios/Sources apple/Package.swift
 
