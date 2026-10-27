@@ -10,3 +10,4 @@ apple/ios/**/Info.plist
 apple/ios/Info.plist
 apple/ios/*.entitlements
 .scratch/
+.env

@@ -1,28 +1,30 @@
 #!/bin/bash
 # Archives Holt for iPhone and uploads it to App Store Connect, for TestFlight.
 #
-# Needs an App Store Connect API key with the App Manager role, in the environment:
+# Signs and uploads as the Apple account signed in to Xcode, or with an App Store Connect
+# API key when these are set. The key needs the Admin role, which cloud signing requires.
 #   ASC_KEY_PATH   path to the AuthKey_XXXXXXXXXX.p8 file
 #   ASC_KEY_ID     its key id
 #   ASC_ISSUER_ID  the issuer id, from Users and Access → Integrations
-# The NOTARY_* names that scripts/dist.sh reads work too. Nothing secret lives in the repo.
+# The NOTARY_* names that scripts/dist.sh reads work too. Put the exports in a `.env` at the
+# repo root, which git ignores, and this script loads it. Nothing secret lives in the repo.
 #
 # EXPORT_ONLY=1 builds build/testflight/Holt.ipa without uploading it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+[ -f .env ] && . ./.env
 
 key="${ASC_KEY_PATH:-${NOTARY_KEY_PATH:-}}"
 key_id="${ASC_KEY_ID:-${NOTARY_KEY_ID:-}}"
 issuer="${ASC_ISSUER_ID:-${NOTARY_ISSUER_ID:-}}"
-if [ -z "$key" ] || [ -z "$key_id" ] || [ -z "$issuer" ]; then
-    echo "Set ASC_KEY_PATH, ASC_KEY_ID and ASC_ISSUER_ID to an App Store Connect API key." >&2
-    exit 1
+auth=(-allowProvisioningUpdates)
+if [ -n "$key" ] && [ -n "$key_id" ] && [ -n "$issuer" ]; then
+    auth+=(-authenticationKeyPath "$key" -authenticationKeyID "$key_id" -authenticationKeyIssuerID "$issuer")
 fi
 
 # Every upload needs a higher build number than the last. A timestamp always is.
 build="$(date -u +%Y%m%d).$((10#$(date -u +%H%M)))"
 out=build/testflight
-auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$key_id" -authenticationKeyIssuerID "$issuer")
 
 make core-ios
 (cd apple/ios && xcodegen generate --quiet)
