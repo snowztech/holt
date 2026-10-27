@@ -13,6 +13,9 @@ final class Library {
     /// A pairing link opened from the Camera, waiting for the pairing sheet.
     var pendingPairing: PairingLink?
     private(set) var notice: String?
+    /// Text is on the clipboard that Holt hasn't sent yet. iOS says the clipboard changed
+    /// without the paste prompt, so Holt can offer it without reading it.
+    private(set) var newCopy = false
     private var arrived = Set<Int64>()
 
     init() {
@@ -55,6 +58,7 @@ final class Library {
 
     func copy(_ clip: Clip) {
         UIPasteboard.general.string = clip.text
+        markCopySeen()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         show("Copied")
     }
@@ -70,6 +74,7 @@ final class Library {
     }
 
     func send(_ text: String) async {
+        markCopySeen()
         guard !text.isEmpty else { return }
         let start = Date()
         let connected = await Core.shared.send(text)
@@ -99,6 +104,15 @@ final class Library {
     func removeDevice(_ device: Device) {
         try? Core.shared.node?.removeDevice(deviceId: device.id)
         refresh()
+    }
+
+    func checkForNewCopy() {
+        newCopy = Core.hasNewCopy
+    }
+
+    func markCopySeen() {
+        Core.markCopySeen()
+        newCopy = false
     }
 
     private func show(_ message: String) {

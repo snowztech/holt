@@ -45,6 +45,26 @@ final class Core {
 
     /// The shared container. Unsigned Simulator builds have no app group, so they fall
     /// back to the process's own Application Support.
+    /// The clipboard change Holt last sent or put there itself, shared with the
+    /// extensions so the app doesn't offer a copy one of them already sent.
+    static func markCopySeen() {
+        UserDefaults(suiteName: appGroup)?.set(UIPasteboard.general.changeCount, forKey: seenCopyKey)
+    }
+
+    /// Text is on the clipboard that Holt hasn't sent. Asking doesn't show the paste prompt.
+    static var hasNewCopy: Bool {
+        let defaults = UserDefaults(suiteName: appGroup)
+        // On first launch, whatever is on the clipboard is old news.
+        guard defaults?.object(forKey: seenCopyKey) != nil else {
+            markCopySeen()
+            return false
+        }
+        let board = UIPasteboard.general
+        return board.hasStrings && board.changeCount != defaults?.integer(forKey: seenCopyKey)
+    }
+
+    private static let seenCopyKey = "seenClipboardChange"
+
     static var container: URL {
         let url =
             FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
