@@ -18,6 +18,16 @@ The Makefile signs with your Apple Development certificate if you have one. That
 
 ## How it fits together
 
+How a clip travels from a copy on one device to your others:
+
+![A copy on a Mac or iPhone is captured, kept in that device's holt.db, and synced over iroh to every paired device](docs/flow.png)
+
+And the pieces in each app that make it happen:
+
+![The Mac and iPhone apps each have a Store and a Node from the Rust core, and find each other over Bonjour or n0 discovery](docs/architecture.png)
+
+Both diagrams come from [Archify](https://github.com/tt-a1i/archify) specs, `docs/flow.json` and `docs/architecture.json`. Edit the spec, then export a new PNG.
+
 ```
 core/holt-core/        Rust
   src/lib.rs           Store: SQLite history, search, and the sync merge rules
