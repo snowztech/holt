@@ -83,6 +83,7 @@
         <li><a href="#images">Images</a></li>
         <li><a href="#sync">Sync between Macs</a></li>
         <li><a href="#iphone">iPhone (beta)</a></li>
+        <li><a href="#origin">Where a clip came from</a></li>
         <li><a href="#launchers">Raycast and Alfred</a></li>
         <li><a href="#settings">Settings</a></li>
         <li><a href="#shortcuts">Keyboard shortcuts</a></li>
@@ -140,7 +141,7 @@
         <p>Drag any clip out of the list and drop it into another app, like a text field, a Mail message or a Finder window.</p>
 
         <h3>Where a clip came from</h3>
-        <p>Press <kbd class="sn-kbd">⌘I</kbd> to see when and where the selected clip was copied, and how it reached this Mac: through Universal Clipboard, or from a paired Mac, and how long that took. From a paired Mac it says whether the clip came directly or <a href="#sync">through a relay</a>, which is slower and usually means a router is in the way. Press it again to hide it.</p>
+        <p>Press <kbd class="sn-kbd">⌘I</kbd> to see when and where the selected clip was copied, and how it got to this Mac. <a href="#origin">What it shows</a> is explained below.</p>
 
         <h3>Delete</h3>
         <p><kbd class="sn-kbd">⌘⌫</kbd> deletes the selected clip, here and on your paired Macs.</p>
@@ -192,7 +193,7 @@
           <li><strong>Different networks.</strong> They connect directly over the internet.</li>
           <li><strong>A router in the way.</strong> An encrypted relay passes the data along. It can't read it and doesn't store it.</li>
         </ul>
-        <p>Sync is end-to-end encrypted and never uses Bluetooth. Only Macs you paired can connect.</p>
+        <p>Sync is end-to-end encrypted and never uses Bluetooth. Only Macs you paired can connect. <kbd class="sn-kbd">⌘I</kbd> on a clip shows which way it came: same network, over the internet or via relay.</p>
       </section>
 
       <section id="iphone">
@@ -205,6 +206,7 @@
           <li>On your iPhone, open Holt, tap Pair with your Mac and scan the QR code. Pointing the Camera app at it works too.</li>
           <li>Without a camera, pick your Mac under Nearby Macs and type the code it shows. For this, both need to be on the same network.</li>
         </ol>
+        <p>After that, your iPhone and your Macs sync the same ways your Macs do with each other: <a href="#sync">on the same Wi-Fi, across the internet, or through a relay</a>.</p>
 
         <h3>From your Mac to your iPhone</h3>
         <p>Everything you copy on your Mac shows up in Holt on your iPhone. Tap a clip to copy it, then paste it anywhere. iOS doesn't let apps change the clipboard in the background, so the clip waits in Holt until you tap it.</p>
@@ -225,6 +227,36 @@
         <p>Apple's Universal Clipboard keeps working next to Holt. Copy on your iPhone, paste on a Mac nearby, and Holt keeps it in your history. It's the only way a copy leaves your iPhone on its own, and for now the only way images do: Holt for iPhone sends text and links. Press <kbd class="sn-kbd">⌘I</kbd> on a clip to see which way it came.</p>
       </section>
 
+      <section id="origin">
+        <h2>Where a clip came from</h2>
+        <p>Select a clip in the popup and press <kbd class="sn-kbd">⌘I</kbd>. A small panel under the preview shows where the clip was copied and how it got to this Mac. It stays open as you move through clips. Press <kbd class="sn-kbd">⌘I</kbd> again to hide it.</p>
+
+        <h3>Copied</h3>
+        <p>When and where the clip was copied.</p>
+        <ul>
+          <li><strong>14:32:07 on this Mac in Safari.</strong> You copied it here, in that app.</li>
+          <li><strong>14:32:07 on iPhone.</strong> It was copied on one of your paired devices, and Holt synced it here.</li>
+          <li><strong>14:32:08, through Universal Clipboard.</strong> Apple's Universal Clipboard brought it from an iPhone, iPad or Mac signed in to your Apple Account. Holt only recorded it when it landed.</li>
+        </ul>
+
+        <h3>Arrived</h3>
+        <p>Each time Holt sync brought the clip from a paired device. A copy can arrive more than once, for example straight from your iPhone and again from another Mac. Each arrival has two lines.</p>
+        <p>The first line is the device that sent it, and how:</p>
+        <ul>
+          <li><strong>same network</strong> means it came straight from that device over the network you share, like your home Wi-Fi. It never left that network.</li>
+          <li><strong>over the internet</strong> means it came straight from that device, but you were on different networks, like your iPhone on mobile data and your Mac at home. It crossed the internet end-to-end encrypted, the way a video call does, with no server in between.</li>
+          <li><strong>via relay</strong> means the two devices couldn't reach each other, usually because a router or firewall was in the way. A relay server run by n0, the makers of iroh, passed the encrypted clip along. It can't read it and doesn't keep it. A relay is a little slower, but it works on any network.</li>
+        </ul>
+        <p>When devices reconnect, they often start through a relay for a moment while they find a direct path. So the first clip after a reconnect can show via relay, and the next ones same network or over the internet. A VPN, like Tailscale, shows as over the internet, though the connection is still direct.</p>
+        <p>The second line, in grey, is when it arrived, how long after the copy, and where from:</p>
+        <ul>
+          <li><strong>16:32:17</strong> is the time it got to this Mac.</li>
+          <li><strong>0.1 s later</strong> is how long after the copy. It compares two devices' clocks, so take it as approximate.</li>
+          <li><strong>The address</strong> is the other device's IP address, or the relay server's name for a relay. It's there for the curious: the label above already says which network it was.</li>
+        </ul>
+        <p>No Arrived line means Holt sync didn't bring the clip: it was copied on this Mac, or it came through Universal Clipboard.</p>
+      </section>
+
       <section id="launchers">
         <h2>Raycast and Alfred</h2>
         <p>Both read the history Holt keeps on your Mac, so Holt needs to be installed. They use the same search: every word has to match, and pinned clips come first.</p>
@@ -238,7 +270,7 @@
 
       <section id="settings">
         <h2>Settings</h2>
-        <p>Open them from the menu bar menu, or press <kbd class="sn-kbd">⌘,</kbd> while the menu is open.</p>
+        <p>Open them from the menu bar menu, or press <kbd class="sn-kbd">⌘,</kbd> while the menu or the popup is open.</p>
 
         <h3>General</h3>
         <ul>
@@ -272,6 +304,7 @@
             <tr><td><kbd class="sn-kbd">⌘P</kbd></td><td>Pin or unpin</td></tr>
             <tr><td><kbd class="sn-kbd">space</kbd></td><td>Show an image full size</td></tr>
             <tr><td><kbd class="sn-kbd">⌘I</kbd></td><td>Show where a clip came from and how it got here</td></tr>
+            <tr><td><kbd class="sn-kbd">⌘,</kbd></td><td>Open Settings</td></tr>
             <tr><td><kbd class="sn-kbd">⌘O</kbd></td><td>Open a link, or an image in Preview</td></tr>
             <tr><td><kbd class="sn-kbd">⌘⌫</kbd></td><td>Delete, here and on your other Macs</td></tr>
             <tr><td><kbd class="sn-kbd">esc</kbd></td><td>Close</td></tr>
@@ -300,6 +333,10 @@
           <details>
             <summary>Picking a clip copies it but doesn't paste</summary>
             <p>Turn on Holt in System Settings → Privacy &amp; Security → Accessibility. Settings → General in Holt shows whether it's on.</p>
+          </details>
+          <details>
+            <summary>The popup says Not connected to iPhone</summary>
+            <p>That's normal. iOS stops Holt's connection soon after you leave the app, to save battery. Sending from your iPhone connects again, and anything you copied on your Mac shows up the next time you open Holt on the iPhone.</p>
           </details>
           <details>
             <summary>My other Mac doesn't show up under Nearby</summary>
