@@ -1,0 +1,268 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "How a clip travels",
+    "output": "flow.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "from-mac",
+        "label": "Copy on a Mac",
+        "focus": [
+          "maccopy",
+          "watcher",
+          "storemac",
+          "sync",
+          "onphone",
+          "othermacs"
+        ],
+        "note": "The Mac sees every copy and sends it to your other devices."
+      },
+      {
+        "id": "from-iphone",
+        "label": "Copy on the iPhone",
+        "focus": [
+          "phonecopy",
+          "phoneapp",
+          "storephone",
+          "sync",
+          "onmac"
+        ],
+        "note": "iOS hides the clipboard, so the iPhone sends when you ask."
+      },
+      {
+        "id": "network",
+        "label": "The network",
+        "focus": [
+          "sync",
+          "relay"
+        ],
+        "note": "Direct when possible, through an iroh relay when not, always end-to-end encrypted."
+      }
+    ],
+    "viewBox": [
+      1070,
+      610
+    ],
+    "legend": {
+      "entries": {
+        "emphasis": {
+          "label": "a clip moving"
+        },
+        "dashed": {
+          "label": "only in some cases"
+        },
+        "default": {
+          "label": "sync"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "label": "You copy"
+    },
+    {
+      "label": "Holt captures"
+    },
+    {
+      "label": "Kept on device"
+    },
+    {
+      "label": "Sync"
+    },
+    {
+      "label": "Shows up"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "maccopy",
+      "type": "external",
+      "label": "Copy on a Mac",
+      "sublabel": "⌘C in any app",
+      "stage": 0,
+      "row": 0,
+      "width": 100
+    },
+    {
+      "id": "phonecopy",
+      "type": "external",
+      "label": "Copy on the iPhone",
+      "sublabel": "in any app",
+      "stage": 0,
+      "row": 2,
+      "width": 124
+    },
+    {
+      "id": "watcher",
+      "type": "frontend",
+      "label": "Holt for Mac",
+      "sublabel": "every 0.5 s",
+      "stage": 1,
+      "row": 0,
+      "width": 100
+    },
+    {
+      "id": "phoneapp",
+      "type": "frontend",
+      "label": "Holt for iPhone",
+      "sublabel": "when you send",
+      "stage": 1,
+      "row": 2,
+      "width": 100
+    },
+    {
+      "id": "storemac",
+      "type": "database",
+      "label": "Mac history",
+      "sublabel": "holt.db",
+      "stage": 2,
+      "row": 0,
+      "width": 100
+    },
+    {
+      "id": "storephone",
+      "type": "database",
+      "label": "iPhone history",
+      "sublabel": "holt.db",
+      "stage": 2,
+      "row": 2,
+      "width": 100
+    },
+    {
+      "id": "sync",
+      "type": "messagebus",
+      "label": "iroh link",
+      "sublabel": "paired only",
+      "stage": 3,
+      "row": 1,
+      "tag": "end-to-end encrypted",
+      "width": 100
+    },
+    {
+      "id": "relay",
+      "type": "cloud",
+      "label": "iroh relay",
+      "sublabel": "run by n0",
+      "stage": 3,
+      "row": 3,
+      "width": 100
+    },
+    {
+      "id": "onphone",
+      "type": "frontend",
+      "label": "On your iPhone",
+      "sublabel": "top of the list",
+      "stage": 4,
+      "row": 0,
+      "width": 100
+    },
+    {
+      "id": "onmac",
+      "type": "frontend",
+      "label": "On your Macs",
+      "sublabel": "⇧⌘V, clipboard",
+      "stage": 4,
+      "row": 2,
+      "width": 100
+    },
+    {
+      "id": "othermacs",
+      "type": "backend",
+      "label": "Your other Macs",
+      "sublabel": "same history",
+      "stage": 4,
+      "row": 3,
+      "width": 100
+    }
+  ],
+  "flows": [
+    {
+      "from": "maccopy",
+      "to": "watcher",
+      "label": "noticed",
+      "variant": "emphasis"
+    },
+    {
+      "from": "watcher",
+      "to": "storemac",
+      "label": "new clip",
+      "variant": "emphasis"
+    },
+    {
+      "from": "phonecopy",
+      "to": "phoneapp",
+      "label": "you send it",
+      "variant": "dashed"
+    },
+    {
+      "from": "phoneapp",
+      "to": "storephone",
+      "label": "new clip",
+      "variant": "emphasis"
+    },
+    {
+      "from": "storemac",
+      "to": "sync",
+      "label": "missing rows"
+    },
+    {
+      "from": "storephone",
+      "to": "sync",
+      "label": "missing rows"
+    },
+    {
+      "from": "sync",
+      "to": "onphone",
+      "label": "Mac clips",
+      "variant": "emphasis"
+    },
+    {
+      "from": "sync",
+      "to": "onmac",
+      "label": "iPhone clips",
+      "variant": "emphasis"
+    },
+    {
+      "from": "sync",
+      "to": "relay",
+      "label": "no direct path",
+      "variant": "dashed",
+      "labelDy": 24
+    },
+    {
+      "from": "onmac",
+      "to": "othermacs",
+      "label": "passed along",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Capture",
+      "items": [
+        "The Mac records every copy, except ones marked private",
+        "iOS hides the clipboard from apps, so the iPhone sends from Paste, Control Center or the share sheet"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Sync",
+      "items": [
+        "Each device sends the others the clips they're missing",
+        "A clip from the last 2 minutes lands on the Mac's clipboard"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Privacy",
+      "items": [
+        "Only devices paired with a 6-digit code can connect",
+        "No Holt server and no account. A relay only sees encrypted bytes"
+      ]
+    }
+  ]
+}

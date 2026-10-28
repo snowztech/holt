@@ -93,7 +93,7 @@ After that the Macs stay connected, and Holt never uses Bluetooth:
 
 Copies, pins and deletes all sync. A clip copied on another Mac in the last 2 minutes goes straight onto this Mac's clipboard, and a small notice says where it came from.
 
-Under the hood, the connection is [iroh](https://iroh.computer). The pairing code is checked with SPAKE2, so someone on the same network gets one guess per try, and pairing stops after 5 wrong codes.
+Under the hood, the connection is [iroh](https://iroh.computer). The pairing code is checked with SPAKE2, so someone on the same network gets one guess per try, and pairing stops after 5 wrong codes. [How Holt works](docs/architecture.md) walks through the whole flow.
 
 ## Privacy
 

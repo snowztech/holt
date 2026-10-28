@@ -11,3 +11,4 @@ apple/ios/Info.plist
 apple/ios/*.entitlements
 .scratch/
 .env
+docs/*.html

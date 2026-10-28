@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "How Holt keeps and syncs your clipboard",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "capture",
+        "label": "Capture",
+        "focus": [
+          "macapp",
+          "storemac",
+          "iphone",
+          "ext",
+          "storephone"
+        ],
+        "note": "How a copy becomes a clip in each device's database."
+      },
+      {
+        "id": "sync",
+        "label": "Sync",
+        "focus": [
+          "storemac",
+          "nodemac",
+          "nodephone",
+          "storephone",
+          "othermac"
+        ],
+        "note": "Sessions trade per-origin cursors, then send the rows the other side is missing."
+      },
+      {
+        "id": "finding",
+        "label": "Finding each other",
+        "focus": [
+          "iphone",
+          "bonjour",
+          "nodemac",
+          "nodephone",
+          "discovery",
+          "relay"
+        ],
+        "note": "Bonjour for pairing nearby, n0 discovery and relays across networks."
+      }
+    ],
+    "repository": {
+      "url": "https://github.com/snowztech/holt",
+      "provider": "github",
+      "revision": "10e404b4ef4632586b1ef4ea0a3d1ea11670ce92"
+    }
+  },
+  "components": [
+    {
+      "id": "macapp",
+      "type": "frontend",
+      "label": "Holt for Mac",
+      "sublabel": "polls NSPasteboard",
+      "pos": [
+        310,
+        60
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "apple/Sources/Holt/Clipboard.swift"
+        },
+        {
+          "path": "apple/Sources/Holt/Devices.swift"
+        }
+      ]
+    },
+    {
+      "id": "storemac",
+      "type": "database",
+      "label": "Store",
+      "sublabel": "holt.db SQLite",
+      "pos": [
+        310,
+        236
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "core/holt-core/src/lib.rs"
+        }
+      ]
+    },
+    {
+      "id": "nodemac",
+      "type": "backend",
+      "label": "Node",
+      "sublabel": "iroh QUIC",
+      "pos": [
+        310,
+        412
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "core/holt-core/src/net.rs"
+        }
+      ]
+    },
+    {
+      "id": "othermac",
+      "type": "backend",
+      "label": "Another Mac",
+      "sublabel": "same core",
+      "pos": [
+        40,
+        412
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "bonjour",
+      "type": "cloud",
+      "label": "Bonjour / mDNS",
+      "sublabel": "_holt-pair._tcp",
+      "pos": [
+        590,
+        60
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "discovery",
+      "type": "cloud",
+      "label": "n0 discovery",
+      "sublabel": "device id to address",
+      "pos": [
+        520,
+        236
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "relay",
+      "type": "cloud",
+      "label": "n0 relay",
+      "sublabel": "encrypted bytes only",
+      "pos": [
+        730,
+        236
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "iphone",
+      "type": "frontend",
+      "label": "Holt for iPhone",
+      "sublabel": "Paste button",
+      "pos": [
+        950,
+        60
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "apple/ios/Sources/Library.swift"
+        },
+        {
+          "path": "apple/ios/Sources/Nearby.swift"
+        }
+      ]
+    },
+    {
+      "id": "ext",
+      "type": "frontend",
+      "label": "Extensions",
+      "sublabel": "share, Control Center",
+      "pos": [
+        1130,
+        60
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "apple/ios/Shared/Core.swift"
+        }
+      ]
+    },
+    {
+      "id": "storephone",
+      "type": "database",
+      "label": "Store",
+      "sublabel": "App Group holt.db",
+      "pos": [
+        950,
+        236
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "nodephone",
+      "type": "backend",
+      "label": "Node",
+      "sublabel": "iroh QUIC",
+      "pos": [
+        950,
+        412
+      ],
+      "size": [
+        140,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Mac",
+      "wraps": [
+        "macapp",
+        "storemac",
+        "nodemac"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "iPhone",
+      "wraps": [
+        "iphone",
+        "ext",
+        "storephone",
+        "nodephone"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Internet, run by n0",
+      "wraps": [
+        "discovery",
+        "relay"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "mac-records",
+      "from": "macapp",
+      "to": "storemac",
+      "label": "record copy",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 69
+    },
+    {
+      "id": "mac-wakes",
+      "from": "storemac",
+      "to": "nodemac",
+      "label": "wake sessions",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 69
+    },
+    {
+      "id": "phone-paste",
+      "from": "iphone",
+      "to": "storephone",
+      "label": "add clip",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 69
+    },
+    {
+      "id": "ext-writes",
+      "from": "ext",
+      "to": "storephone",
+      "label": "same file"
+    },
+    {
+      "id": "phone-wakes",
+      "from": "storephone",
+      "to": "nodephone",
+      "label": "wake, or every 2 s",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 69
+    },
+    {
+      "id": "sync-direct",
+      "from": "nodemac",
+      "to": "nodephone",
+      "label": "sync, both ways",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "pair-advertise",
+      "from": "macapp",
+      "to": "bonjour",
+      "label": "advertise code",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "pair-browse",
+      "from": "iphone",
+      "to": "bonjour",
+      "label": "find nearby",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "lookup",
+      "from": "nodephone",
+      "to": "discovery",
+      "label": "look up Mac",
+      "fromSide": "left",
+      "toSide": "bottom"
+    },
+    {
+      "id": "via-relay",
+      "from": "nodephone",
+      "to": "relay",
+      "label": "no direct path",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "bottom"
+    },
+    {
+      "id": "forward",
+      "from": "nodemac",
+      "to": "othermac",
+      "label": "forwards every origin",
+      "fromSide": "left",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Capture",
+      "items": [
+        "The Mac checks the clipboard twice a second and skips copies marked private",
+        "iOS hides the clipboard in the background, so the iPhone sends from Paste, Control Center, Back Tap or the share sheet"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Pairing",
+      "items": [
+        "Devices on the Mac shows a 6-digit code and a QR code, and advertises over Bonjour",
+        "SPAKE2 checks the code without sending it"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Sync",
+      "items": [
+        "Rows carry their origin device and a sequence number",
+        "Sessions trade cursors, then send what the other side is missing, from every origin",
+        "The newest update of a clip wins"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Network",
+      "items": [
+        "Direct QUIC when a path exists",
+        "n0 relays otherwise, still end-to-end encrypted"
+      ]
+    }
+  ]
+}

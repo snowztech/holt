@@ -60,6 +60,11 @@ struct HomeView: View {
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 4, trailing: 20))
             }
+            if library.newCopy && library.query.isEmpty {
+                NewCopyBanner(library: library)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 4, trailing: 20))
+            }
             if let latest {
                 LatestClip(clip: latest, showSource: library.devices.count > 1) { library.copy(latest) }
                     .listRowSeparator(.hidden)
@@ -256,6 +261,40 @@ private struct ClipRow: View {
             .font(.footnote)
             .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// You copied in another app, then opened Holt. iOS hid the copy from Holt until now,
+/// so offer to send it. Apple's paste button reads it without the prompt.
+private struct NewCopyBanner: View {
+    let library: Library
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("You copied something new").font(.subheadline.weight(.semibold))
+                Text(
+                    library.devices.contains(where: \.online)
+                        ? "Paste sends it to \(library.macs)." : "Paste sends it once \(library.macs) connects."
+                )
+                .font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            PasteButton(payloadType: String.self) { strings in
+                Task { @MainActor in await library.send(strings.joined(separator: "\n")) }
+            }
+            .buttonBorderShape(.capsule)
+            .labelStyle(.titleAndIcon)
+            .tint(Brand.riverDeep)
+            Button("Not now", systemImage: "xmark") { library.markCopySeen() }
+                .labelStyle(.iconOnly)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .transition(.opacity)
     }
 }
 

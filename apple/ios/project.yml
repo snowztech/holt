@@ -53,6 +53,8 @@ targets:
         CFBundleDisplayName: Holt
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Only the standard TLS and QUIC encryption iroh uses, so App Store Connect stops asking per build.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocalNetworkUsageDescription: Holt connects directly to your Macs on this network to sync clips.

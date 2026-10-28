@@ -18,6 +18,7 @@ struct SendClipboardToHolt: AppIntent {
             return .result(dialog: "There's no text on the clipboard.")
         }
         Core.log("send clipboard: read the clipboard in \(ms(since: start)) ms")
+        Core.markCopySeen()
         let connected = await Core.shared.send(text)
         Core.log("send clipboard: done in \(ms(since: start)) ms, connected: \(connected)")
         return .result(dialog: connected ? "Sent to your Mac" : "Saved. It goes to your Mac when it's reachable.")
@@ -36,6 +37,8 @@ struct SendToHolt: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let start = Date()
         Core.log("send text: started in the \(Core.process)")
+        // Usually a Back Tap shortcut that ran Get Clipboard first.
+        Core.markCopySeen()
         let connected = await Core.shared.send(text)
         Core.log("send text: done in \(ms(since: start)) ms, connected: \(connected)")
         return .result(dialog: connected ? "Sent to your Mac" : "Saved. It goes to your Mac when it's reachable.")

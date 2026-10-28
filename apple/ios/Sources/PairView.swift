@@ -80,8 +80,14 @@ struct PairView: View {
                 }
             }
 
-            Section("Nearby Macs") {
-                if nearby.macs.isEmpty {
+            Section {
+                if nearby.denied {
+                    Link(destination: URL(string: UIApplication.openSettingsURLString)!) {
+                        OptionRow(
+                            symbol: "network", title: "Allow Local Network",
+                            detail: "Holt needs it to find your Mac. Turn it on in Settings.")
+                    }
+                } else if nearby.macs.isEmpty {
                     HStack(spacing: 12) {
                         ProgressView()
                         Text("Looking for Macs with Devices open").foregroundStyle(.secondary)
@@ -93,6 +99,14 @@ struct PairView: View {
                     } label: {
                         OptionRow(symbol: "laptopcomputer", title: mac.name, detail: "Type the code it shows.")
                     }
+                }
+            } header: {
+                Text("Nearby Macs")
+            } footer: {
+                if nearby.macs.isEmpty && !nearby.denied {
+                    Text(
+                        "Not seeing your Mac? Both need to be on the same network, and some guest and office networks "
+                            + "block this. The QR code works on any network.")
                 }
             }
         }
