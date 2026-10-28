@@ -82,6 +82,7 @@
         <li><a href="#pins">Pins</a></li>
         <li><a href="#images">Images</a></li>
         <li><a href="#sync">Sync between Macs</a></li>
+        <li><a href="#iphone">iPhone (beta)</a></li>
         <li><a href="#launchers">Raycast and Alfred</a></li>
         <li><a href="#settings">Settings</a></li>
         <li><a href="#shortcuts">Keyboard shortcuts</a></li>
@@ -179,7 +180,7 @@
           <li>On one Mac, click Pair next to the other Mac and type the code the other Mac shows.</li>
         </ol>
         <p>Your Macs stay paired from then on, on any network. To stop syncing with one, click Remove next to it in Settings → Devices.</p>
-        <p>The QR code in that tab is for the iPhone app, which is coming soon.</p>
+        <p>The QR code in that tab pairs <a href="#iphone">Holt for iPhone</a>.</p>
 
         <h3>Copy here, paste there</h3>
         <p>A clip you copied on another Mac in the last 2 minutes goes straight onto this Mac's clipboard, so you can press <kbd class="sn-kbd">⌘V</kbd> right away. A small notice says which Mac it came from. You can turn the notice off in Settings → General.</p>
@@ -191,6 +192,36 @@
           <li><strong>A router in the way.</strong> An encrypted relay passes the data along. It can't read it and doesn't store it.</li>
         </ul>
         <p>Sync is end-to-end encrypted and never uses Bluetooth. Only Macs you paired can connect.</p>
+      </section>
+
+      <section id="iphone">
+        <h2>iPhone <span class="sn-badge">beta</span></h2>
+        <p>Holt for iPhone is in beta. <a href="https://testflight.apple.com/join/vREWnfrC">Join it on TestFlight</a>, which also keeps it up to date. It needs iOS 17 or later, and Holt on your Mac.</p>
+
+        <h3>Pair it with your Mac</h3>
+        <ol class="steps">
+          <li>On your Mac, open Holt Settings → Devices.</li>
+          <li>On your iPhone, open Holt, tap Pair with your Mac and scan the QR code. Pointing the Camera app at it works too.</li>
+          <li>Without a camera, pick your Mac under Nearby Macs and type the code it shows. For this, both need to be on the same network.</li>
+        </ol>
+
+        <h3>From your Mac to your iPhone</h3>
+        <p>Everything you copy on your Mac shows up in Holt on your iPhone. Tap a clip to copy it, then paste it anywhere. iOS doesn't let apps change the clipboard in the background, so the clip waits in Holt until you tap it.</p>
+
+        <h3>From your iPhone to your Mac</h3>
+        <p>iOS doesn't let apps read your clipboard in the background either, so nothing leaves your iPhone until you send it. Copy something, then use one of these:</p>
+        <ul>
+          <li><strong>Back Tap.</strong> Settings → Accessibility → Touch → Back Tap → Double Tap → Send Clipboard to Holt. Then a double tap on the back of your iPhone sends what you copied.</li>
+          <li><strong>Action Button.</strong> On iPhones that have one: Settings → Action Button → Shortcut → Send Clipboard to Holt.</li>
+          <li><strong>Control Center.</strong> On iOS 18 or later: open Control Center, tap +, and add Send Clipboard to Holt.</li>
+          <li><strong>Share sheet.</strong> Select text or a link in any app, tap Share, then Holt.</li>
+          <li><strong>Siri.</strong> Say "Send clipboard to Holt".</li>
+          <li><strong>Holt itself.</strong> When you open Holt after copying something new, it offers to send it.</li>
+        </ul>
+        <p>Holt → Settings → Send faster has the same list. To stop iOS asking every time Holt reads what you copied, set Paste from Other Apps to Allow in Settings → Holt.</p>
+
+        <h3>Universal Clipboard</h3>
+        <p>Apple's Universal Clipboard keeps working next to Holt. Copy on your iPhone, paste on a Mac nearby, and Holt keeps it in your history. It's the only way a copy leaves your iPhone on its own, and for now the only way images do: Holt for iPhone sends text and links. Press <kbd class="sn-kbd">⌘I</kbd> on a clip to see which way it came.</p>
       </section>
 
       <section id="launchers">
