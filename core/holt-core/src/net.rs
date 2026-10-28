@@ -10,6 +10,7 @@
 //! and keeps sending as clips change.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -405,13 +406,15 @@ async fn receive_changes(
                     *seen = (*seen).max(row.seq);
                 }
             }
-            inner.store.apply(rows, Some(&delivery(conn, peer_id)))?;
+            inner
+                .store
+                .apply(rows, Some(&delivery(inner, conn, peer_id)))?;
         }
     }
 }
 
 /// The path the connection is using right now, so each clip can say how it got here.
-fn delivery(conn: &Connection, peer_id: &str) -> Delivery {
+fn delivery(inner: &Inner, conn: &Connection, peer_id: &str) -> Delivery {
     let paths = conn.paths();
     let selected = paths
         .iter()
@@ -421,15 +424,46 @@ fn delivery(conn: &Connection, peer_id: &str) -> Delivery {
         Some(TransportAddr::Relay(url)) => {
             (Some(ArrivalPath::Relay), url.host_str().map(String::from))
         }
-        // The address says whether it was this network or the internet. Holt doesn't
-        // guess: a public IPv6 address is often on the same Wi-Fi.
-        Some(TransportAddr::Ip(addr)) => (Some(ArrivalPath::Direct), Some(addr.ip().to_string())),
+        Some(TransportAddr::Ip(addr)) => {
+            let ours: Vec<IpAddr> = inner.endpoint.addr().ip_addrs().map(|a| a.ip()).collect();
+            let path = if on_this_network(addr.ip(), &ours) {
+                ArrivalPath::SameNetwork
+            } else {
+                ArrivalPath::Internet
+            };
+            (Some(path), Some(addr.ip().to_canonical().to_string()))
+        }
         _ => (None, None),
     };
     Delivery {
         peer: peer_id.into(),
         path,
         address,
+    }
+}
+
+/// Whether a direct path stays on this device's network. A private address does.
+/// A public IPv6 address does when it shares this device's /64 prefix, the part
+/// every device on one network has in common. A public IPv4 address does when
+/// it's this device's own: both are behind the same router. `ours` are this
+/// device's addresses, as iroh knows them.
+fn on_this_network(remote: IpAddr, ours: &[IpAddr]) -> bool {
+    match remote.to_canonical() {
+        IpAddr::V4(v4) => {
+            v4.is_private()
+                || v4.is_link_local()
+                || v4.is_loopback()
+                || ours.iter().any(|o| o.to_canonical() == IpAddr::V4(v4))
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unicast_link_local()
+                || v6.is_unique_local()
+                || ours.iter().any(|o| match o.to_canonical() {
+                    IpAddr::V6(o) => o.segments()[..4] == v6.segments()[..4],
+                    IpAddr::V4(_) => false,
+                })
+        }
     }
 }
 
@@ -724,12 +758,12 @@ mod tests {
             (incoming.text.as_str(), incoming.device.as_str()),
             ("from a", "Mac A")
         );
-        // Both nodes are on this machine with no relay, so the clip came directly.
+        // Both nodes are on this machine, so the clip never left this network.
         let id = b.inner.store.search("from a".into(), 1).unwrap()[0].id;
         let arrivals = b.inner.store.arrivals(id).unwrap();
         assert_eq!(arrivals.len(), 1);
         assert_eq!(arrivals[0].from, "Mac A");
-        assert_eq!(arrivals[0].path, Some(ArrivalPath::Direct));
+        assert_eq!(arrivals[0].path, Some(ArrivalPath::SameNetwork));
         assert!(arrivals[0].address.is_some());
 
         b.inner.store.add("from b".into(), None).unwrap();
@@ -859,6 +893,46 @@ mod tests {
         wait_until("b to get the clip", || {
             texts(&b) == ["over the real network"]
         });
+    }
+
+    #[test]
+    fn tells_this_network_from_the_internet() {
+        let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+        let home_v6 = ip("2a01:cb01:4030:fc35::9");
+        let home_v4 = ip("86.12.3.4");
+        let ours = [ip("192.168.1.10"), home_v4, home_v6];
+        let same = |s: &str| on_this_network(ip(s), &ours);
+
+        // Private, link-local, unique-local and loopback addresses never leave a network.
+        for local in [
+            "192.168.1.20",
+            "10.0.0.5",
+            "172.20.1.1",
+            "169.254.3.3",
+            "fe80::1",
+            "fd12::1",
+            "::1",
+        ] {
+            assert!(same(local), "{local}");
+        }
+        // IPv4 written as IPv6 counts as the IPv4 inside.
+        assert!(same("::ffff:192.168.1.20"));
+        // The same /64 prefix as this Mac: another device on this Wi-Fi.
+        assert!(same("2a01:cb01:4030:fc35:7529:8c33:12b:3986"));
+        // This Mac's own public IPv4: both behind the same router.
+        assert!(same("86.12.3.4"));
+
+        // A phone on mobile data, another home, a VPN address: across the internet.
+        for remote in [
+            "2a01:cb01:4030:fc36::1",
+            "2a01:e0a:1::5",
+            "86.12.3.5",
+            "100.101.1.1",
+        ] {
+            assert!(!same(remote), "{remote}");
+        }
+        // Without knowing this Mac's addresses, a public one is the internet.
+        assert!(!on_this_network(home_v6, &[]));
     }
 
     #[test]
