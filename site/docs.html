@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docs, Holt</title>
+  <meta name="description" content="How to use Holt: search and paste your clipboard history, pins, images, sync between Macs, Raycast and Alfred, settings and shortcuts." />
+  <meta property="og:title" content="Holt docs" />
+  <meta property="og:description" content="How to use Holt, the clipboard history for macOS that syncs between your Macs." />
+  <meta property="og:image" content="https://holt.snowztech.com/assets/og.png" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="640" />
+  <meta property="og:image:alt" content="Holt: your clipboard, kept. Clipboard history for macOS, synced between your Macs." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://holt.snowztech.com/assets/og.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://holt.snowztech.com/docs" />
+  <meta name="theme-color" content="#0b1110" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <script>
+    try {
+      var t = localStorage.getItem("theme");
+      if (t === "light" || (!t && matchMedia("(prefers-color-scheme: light)").matches)) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@snowztech/ui-css@0.3.0/dist/snowztech-ui.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@snowztech/ui-js@0.2.0/dist/snowztech-ui.esm.js"></script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <!-- Skip's face alone is the logo. The full Skip holds a pebble. -->
+      <symbol id="skip-face" viewBox="18 46 164 126">
+        <circle cx="35" cy="86" r="14" fill="#7A5236" />
+        <circle cx="165" cy="86" r="14" fill="#7A5236" />
+        <circle cx="35" cy="86" r="6" fill="#563824" />
+        <circle cx="165" cy="86" r="6" fill="#563824" />
+        <ellipse cx="100" cy="110" rx="78" ry="58" fill="#7A5236" />
+        <ellipse cx="100" cy="132" rx="40" ry="22" fill="#EAD6C0" />
+        <circle cx="82" cy="137" r="23" fill="#EAD6C0" />
+        <circle cx="118" cy="137" r="23" fill="#EAD6C0" />
+        <ellipse cx="70" cy="101" rx="8.5" ry="9.5" fill="#1D1512" />
+        <ellipse cx="130" cy="101" rx="8.5" ry="9.5" fill="#1D1512" />
+        <circle cx="73" cy="97.5" r="2.8" fill="#fff" />
+        <circle cx="133" cy="97.5" r="2.8" fill="#fff" />
+        <path d="M87 117 Q100 108 113 117 Q113 126 100 128 Q87 126 87 117Z" fill="#1D1512" />
+        <path d="M100 128 V134 M100 134 Q92 142 85 137 M100 134 Q108 142 115 137" fill="none" stroke="#1D1512" stroke-width="3" stroke-linecap="round" />
+        <path d="M60 131 L26 124 M60 139 L25 141 M140 131 L174 124 M140 139 L175 141" fill="none" stroke="#563824" stroke-width="2.4" stroke-linecap="round" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <header class="nav wrap">
+    <a class="brand" href="./" aria-label="Holt home">
+      <svg class="brand-mark" aria-hidden="true"><use href="#skip-face" /></svg>
+      <span class="brand-name">Holt</span>
+    </a>
+    <nav class="nav-links" aria-label="Pages">
+      <a href="./">Home</a>
+      <a href="docs" aria-current="page">Docs</a>
+      <a href="https://github.com/snowztech/holt" target="_blank" rel="noopener">GitHub</a>
+      <button class="sn-theme-toggle" data-sn-theme-toggle aria-label="Switch light and dark">
+        <span class="sn-theme-toggle__indicator"></span>
+      </button>
+    </nav>
+  </header>
+
+  <main class="wrap docs">
+    <nav class="docs-toc" aria-label="On this page">
+      <p class="docs-toc-title">On this page</p>
+      <ol>
+        <li><a href="#start">Get started</a></li>
+        <li><a href="#popup">Find and paste</a></li>
+        <li><a href="#menu">Menu bar menu</a></li>
+        <li><a href="#pins">Pins</a></li>
+        <li><a href="#images">Images</a></li>
+        <li><a href="#sync">Sync between Macs</a></li>
+        <li><a href="#launchers">Raycast and Alfred</a></li>
+        <li><a href="#settings">Settings</a></li>
+        <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+        <li><a href="#help">Troubleshooting</a></li>
+      </ol>
+    </nav>
+
+    <article class="docs-body">
+      <h1>Holt docs</h1>
+      <p class="docs-lede">Holt keeps everything you copy on your Mac. Press <kbd class="sn-kbd">⇧⌘V</kbd>, type a few letters, and paste it again. Here's everything it does.</p>
+
+      <section id="start">
+        <h2>Get started</h2>
+        <p><a href="https://github.com/snowztech/holt/releases/latest/download/Holt.dmg">Download Holt</a>, open the disk image and drag Holt to Applications. Or with Homebrew:</p>
+        <div class="install sn-card sn-card--rounded sn-card--inset">
+          <code>brew install --cask snowztech/tap/holt</code>
+          <button class="sn-copy-btn" data-sn-copy="brew install --cask snowztech/tap/holt" aria-label="Copy command">
+            <span class="sn-copy-btn__idle">copy</span>
+            <span class="sn-copy-btn__copied">copied</span>
+          </button>
+        </div>
+        <p class="docs-fine">Holt needs macOS 14 or later on an Apple Silicon Mac.</p>
+
+        <h3>First launch</h3>
+        <p>A short checklist asks for what Holt needs:</p>
+        <ul>
+          <li><strong>See what you copy.</strong> Required. Set Holt to Always Allow in System Settings → Privacy &amp; Security → Paste from Other Apps. Without it, macOS asks on every copy.</li>
+          <li><strong>Paste for you.</strong> Optional. With Accessibility access, Holt pastes into the app you're in. Without it, Holt puts the clip on your clipboard and you press <kbd class="sn-kbd">⌘V</kbd>.</li>
+          <li><strong>Open at login.</strong> Recommended, so Holt doesn't miss copies after a restart.</li>
+        </ul>
+        <p>Holt lives in the menu bar as Skip's face. It doesn't have a Dock icon.</p>
+
+        <h3>Updates</h3>
+        <p>Holt checks for new versions by itself. When one is out, the menu bar menu shows Update to Holt. You can also pick Check for Updates in the same menu. With Homebrew, <code>brew upgrade</code> works too.</p>
+      </section>
+
+      <section id="popup">
+        <h2>Find and paste</h2>
+        <p>Press <kbd class="sn-kbd">⇧⌘V</kbd> anywhere. The popup opens with your newest clips first and the search field ready.</p>
+
+        <h3>Search</h3>
+        <p>Type any words from the clip, in any order. Every word has to match somewhere, and case doesn't matter, so <code>ssh 10.0</code> finds that one command from last week. Pinned clips come first, then the newest.</p>
+
+        <h3>Paste</h3>
+        <p>Move with <kbd class="sn-kbd">↑</kbd> <kbd class="sn-kbd">↓</kbd> and press <kbd class="sn-kbd">↩</kbd>. Holt pastes the clip into the app you were typing in. The popup never takes focus away from that app, so the paste lands where your cursor was.</p>
+        <p>Hold <kbd class="sn-kbd">⌘</kbd> to see numbers next to the first nine clips, and press <kbd class="sn-kbd">⌘1</kbd> to <kbd class="sn-kbd">⌘9</kbd> to paste one directly. Double-clicking a clip pastes it too.</p>
+        <p>A clip you paste moves back to the top, and keeps the app it was first copied from.</p>
+
+        <h3>Preview</h3>
+        <p>The right side shows the selected clip in full: where it was copied, when, and on which Mac. Links show as a card. Press <kbd class="sn-kbd">⌘O</kbd> to open a link in your browser.</p>
+
+        <h3>Drag out</h3>
+        <p>Drag any clip out of the list and drop it into another app, like a text field, a Mail message or a Finder window.</p>
+
+        <h3>Delete</h3>
+        <p><kbd class="sn-kbd">⌘⌫</kbd> deletes the selected clip, here and on your paired Macs.</p>
+      </section>
+
+      <section id="menu">
+        <h2>Menu bar menu</h2>
+        <p>Click Skip in the menu bar for your 5 most recent clips. Clicking one copies it, so you can paste it with <kbd class="sn-kbd">⌘V</kbd>. You can also drag a clip out of the menu into any app.</p>
+        <p>The menu also shows whether your Macs are connected, and has Open Holt, Settings and Check for Updates. If Holt can't read the clipboard, it shows Allow Clipboard Access at the top.</p>
+      </section>
+
+      <section id="pins">
+        <h2>Pins</h2>
+        <p>Press <kbd class="sn-kbd">⌘P</kbd> on a clip to pin it. Pinned clips stay at the top of the list, never expire, and survive Clear History. Use them for things you paste every day: an address, a signature, a command. Press <kbd class="sn-kbd">⌘P</kbd> again to unpin.</p>
+      </section>
+
+      <section id="images">
+        <h2>Images</h2>
+        <p>Screenshots and pictures you copy are kept too, up to 10 MB each. PNG, JPEG and HEIC images are kept as they are, and other formats are saved as PNG.</p>
+        <p>Holt reads the text in each image on your Mac, with Apple's text recognizer. Search finds it, so <code>invoice 2026</code> finds the screenshot of the invoice. Nothing is sent anywhere.</p>
+        <ul>
+          <li><strong>See it full size.</strong> Select an image and press <kbd class="sn-kbd">space</kbd>. Press it again or <kbd class="sn-kbd">esc</kbd> to close. In the popup this works while the search field is empty, so you can still type a space in a search.</li>
+          <li><strong>In the menu bar menu.</strong> Highlight an image and press <kbd class="sn-kbd">space</kbd>. This needs Accessibility access.</li>
+          <li><strong>Open it.</strong> <kbd class="sn-kbd">⌘O</kbd> opens the image in Preview. Holt's copy is read-only, so it stays as you copied it. Duplicate it in Preview to edit.</li>
+          <li><strong>Paste it.</strong> <kbd class="sn-kbd">↩</kbd> pastes the image itself, and dragging it out drops the file.</li>
+        </ul>
+        <p>Images sync to your other Macs once they run Holt 0.1.4 or later. To stop keeping images, turn off Record images in Settings → History. Raycast and Alfred don't show images yet.</p>
+      </section>
+
+      <section id="sync">
+        <h2>Sync between Macs</h2>
+        <p>Pair your Macs once. After that, copies, pins and deletes show up on every Mac.</p>
+
+        <h3>Pair two Macs</h3>
+        <ol class="steps">
+          <li>Open Holt Settings → Devices on both Macs. They need to be on the same network for this step.</li>
+          <li>Each Mac shows a 6-digit code and lists the other under Nearby.</li>
+          <li>On one Mac, click Pair next to the other Mac and type the code the other Mac shows.</li>
+        </ol>
+        <p>Your Macs stay paired from then on, on any network. To stop syncing with one, click Remove next to it in Settings → Devices.</p>
+        <p>The QR code in that tab is for the iPhone app, which is coming soon.</p>
+
+        <h3>Copy here, paste there</h3>
+        <p>A clip you copied on another Mac in the last 2 minutes goes straight onto this Mac's clipboard, so you can press <kbd class="sn-kbd">⌘V</kbd> right away. A small notice says which Mac it came from. You can turn the notice off in Settings → General.</p>
+
+        <h3>How it connects</h3>
+        <ul>
+          <li><strong>Same Wi-Fi.</strong> Your Macs talk directly over your local network.</li>
+          <li><strong>Different networks.</strong> They connect directly over the internet.</li>
+          <li><strong>A router in the way.</strong> An encrypted relay passes the data along. It can't read it and doesn't store it.</li>
+        </ul>
+        <p>Sync is end-to-end encrypted and never uses Bluetooth. Only Macs you paired can connect.</p>
+      </section>
+
+      <section id="launchers">
+        <h2>Raycast and Alfred</h2>
+        <p>Both read the history Holt keeps on your Mac, so Holt needs to be installed. They use the same search: every word has to match, and pinned clips come first.</p>
+
+        <h3>Raycast</h3>
+        <p>Run Search Clipboard History from the Holt extension. <kbd class="sn-kbd">↩</kbd> pastes the clip, and the action panel can copy it instead or open a link. The extension is waiting for review in the Raycast Store. You can <a href="https://github.com/raycast/extensions/pull/32826">follow it on GitHub</a>.</p>
+
+        <h3>Alfred</h3>
+        <p>This needs Alfred's Powerpack. <a href="https://github.com/snowztech/holt/releases/latest/download/Holt.alfredworkflow">Download the Holt workflow</a> and open it to install. Type <code>holt</code> and what you're looking for. <kbd class="sn-kbd">↩</kbd> pastes the clip, and <kbd class="sn-kbd">⌘↩</kbd> copies it without pasting.</p>
+      </section>
+
+      <section id="settings">
+        <h2>Settings</h2>
+        <p>Open them from the menu bar menu, or press <kbd class="sn-kbd">⌘,</kbd> while the menu is open.</p>
+
+        <h3>General</h3>
+        <ul>
+          <li><strong>Appearance.</strong> System, Light or Dark.</li>
+          <li><strong>Open Holt with.</strong> Click the shortcut and press the keys you want instead of <kbd class="sn-kbd">⇧⌘V</kbd>.</li>
+          <li><strong>Open Holt at login.</strong></li>
+          <li><strong>Show clips arriving from other devices.</strong> The notice when a copy comes from another Mac.</li>
+          <li><strong>Permissions.</strong> Whether Holt can see what you copy and paste for you, with a button to fix each one.</li>
+        </ul>
+
+        <h3>History</h3>
+        <ul>
+          <li><strong>Keep clips for.</strong> 1 week, 1 month, 3 months or 1 year. Older clips are removed, except pinned ones. Holt also keeps at most 5,000 unpinned clips.</li>
+          <li><strong>Record images.</strong> On by default.</li>
+          <li><strong>Never record copies from.</strong> Add apps whose copies Holt should ignore.</li>
+          <li><strong>Clear History.</strong> Removes every unpinned clip, here and on your paired Macs.</li>
+        </ul>
+
+        <h3>Devices</h3>
+        <p>Your paired Macs, whether each is connected, and the code to pair a new one. See <a href="#sync">Sync between Macs</a>.</p>
+      </section>
+
+      <section id="shortcuts">
+        <h2>Keyboard shortcuts</h2>
+        <table class="docs-keys">
+          <tbody>
+            <tr><td><kbd class="sn-kbd">⇧⌘V</kbd></td><td>Open Holt. Change it in Settings → General.</td></tr>
+            <tr><td><kbd class="sn-kbd">↑</kbd> <kbd class="sn-kbd">↓</kbd></td><td>Move through clips</td></tr>
+            <tr><td><kbd class="sn-kbd">↩</kbd></td><td>Paste the clip</td></tr>
+            <tr><td><kbd class="sn-kbd">⌘1</kbd> to <kbd class="sn-kbd">⌘9</kbd></td><td>Paste one of the first nine. Hold <kbd class="sn-kbd">⌘</kbd> to see the numbers.</td></tr>
+            <tr><td><kbd class="sn-kbd">⌘P</kbd></td><td>Pin or unpin</td></tr>
+            <tr><td><kbd class="sn-kbd">space</kbd></td><td>Show an image full size</td></tr>
+            <tr><td><kbd class="sn-kbd">⌘O</kbd></td><td>Open a link, or an image in Preview</td></tr>
+            <tr><td><kbd class="sn-kbd">⌘⌫</kbd></td><td>Delete, here and on your other Macs</td></tr>
+            <tr><td><kbd class="sn-kbd">esc</kbd></td><td>Close</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="privacy">
+        <h2>Privacy</h2>
+        <ul>
+          <li>Your history stays on your Macs, in <code>~/Library/Application Support/Holt</code>. There's no Holt account, no Holt server and no analytics.</li>
+          <li>Copies that password managers like 1Password and Bitwarden mark as private are never recorded.</li>
+          <li>Text in images is read on your Mac and never leaves it.</li>
+          <li>To find each other across networks, your Macs use iroh's discovery and relay servers. Those see your Macs' network addresses, never your clips.</li>
+        </ul>
+        <p>The full <a href="privacy">privacy policy</a> has the details.</p>
+      </section>
+
+      <section id="help">
+        <h2>Troubleshooting</h2>
+        <div class="faq">
+          <details>
+            <summary>Holt doesn't record what I copy</summary>
+            <p>Set Holt to Always Allow in System Settings → Privacy &amp; Security → Paste from Other Apps. While it's missing, the menu bar menu shows Allow Clipboard Access. Also check that the app you copied from isn't in Settings → History → Never record copies from.</p>
+          </details>
+          <details>
+            <summary>Picking a clip copies it but doesn't paste</summary>
+            <p>Turn on Holt in System Settings → Privacy &amp; Security → Accessibility. Settings → General in Holt shows whether it's on.</p>
+          </details>
+          <details>
+            <summary>My other Mac doesn't show up under Nearby</summary>
+            <p>Both Macs need Settings → Devices open and the same network. Also check that Holt is allowed in System Settings → Privacy &amp; Security → Local Network.</p>
+          </details>
+          <details>
+            <summary>The code didn't match</summary>
+            <p>Type the code shown on the other Mac, not this one. After 5 wrong codes that code stops working. Close Settings on the other Mac and open Devices again for a new one.</p>
+          </details>
+          <details>
+            <summary>An image didn't show up</summary>
+            <p>Images over 10 MB are skipped. Also check that Record images is on in Settings → History. If you copied text and an image together, like from a web page, Holt keeps the text.</p>
+          </details>
+          <details>
+            <summary>How do I uninstall Holt?</summary>
+            <p>With Homebrew: <code>brew uninstall --zap --cask holt</code>. Otherwise quit Holt, drag it to the Trash and delete <code>~/Library/Application Support/Holt</code>.</p>
+          </details>
+        </div>
+        <p class="docs-fine">Something else? <a href="https://github.com/snowztech/holt/issues">Open an issue on GitHub</a>.</p>
+      </section>
+    </article>
+  </main>
+
+  <footer class="wrap footer">
+    <a class="brand" href="./">
+      <svg class="brand-mark" aria-hidden="true"><use href="#skip-face" /></svg>
+      <span class="brand-name">Holt</span>
+    </a>
+    <span>MIT licensed · made by <a href="https://github.com/snowztech" target="_blank" rel="noopener">snowztech</a></span>
+    <span class="footer-links">
+      <a href="docs">Docs</a>
+      <a href="privacy">Privacy</a>
+      <a href="https://github.com/snowztech/holt" target="_blank" rel="noopener">GitHub</a>
+    </span>
+  </footer>
+</body>
+</html>

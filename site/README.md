@@ -18,6 +18,7 @@ It's served at https://holt.snowztech.com: a CNAME record `holt` → `snowztech.
 
 ## Notes
 
+- `docs.html` is the user guide at `/docs`. It's the one place that explains every feature, and the repo README links to it, so update it when a feature or a setting changes.
 - The hero popup is HTML, not a screenshot, so it stays sharp and follows the light and dark theme. It mirrors `apple/Sources/Holt/Popup.swift`; update it when the app's look changes.
 - Skip (`#skip`) and Skip's face, the logo (`#skip-face`), are inline SVG, the same shapes the app draws from `SkipFace` in `Brand.swift`.
 - `assets/readme-hero-dark.png` and `readme-hero-light.png` are the README picture: the hero popup rendered 720 CSS pixels wide at 2x in headless Chrome, with a transparent background. The README shows it at `width="720"`, so it's never scaled.

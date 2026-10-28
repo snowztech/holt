@@ -67,23 +67,9 @@ On first launch, a short checklist walks you through setup:
 - **Paste for you.** Optional. Accessibility access lets Holt paste into the app you're in. Without it, Holt copies the clip and you press ⌘V.
 - **Open at login.** Recommended, so Holt never misses a copy after a restart.
 
-## Keyboard shortcuts
+## Docs
 
-| Key | What it does |
-| --- | --- |
-| ⇧⌘V | Open Holt. Change it in Settings → General. |
-| ↑ ↓ | Move through clips |
-| ↩ | Paste the clip |
-| ⌘1 to ⌘9 | Paste one of the first nine. Hold ⌘ to see the numbers. |
-| ⌘P | Pin or unpin |
-| space | Show an image full size, in the popup or the menu bar menu |
-| ⌘O | Open a link, or an image in Preview |
-| ⌘⌫ | Delete, here and on your other Macs |
-| esc | Close |
-
-## Alfred
-
-With Alfred's Powerpack, [download the Holt workflow](https://github.com/snowztech/holt/releases/latest/download/Holt.alfredworkflow) and open it to install. Type `holt` and what you're looking for. Return pastes the clip, ⌘↩ copies it without pasting.
+[holt.snowztech.com/docs](https://holt.snowztech.com/docs) covers everything Holt does: search and paste, pins, images, sync, Raycast and Alfred, settings, keyboard shortcuts and troubleshooting.
 
 ## Sync between Macs
 
@@ -105,18 +91,6 @@ Under the hood, the connection is [iroh](https://iroh.computer). The pairing cod
 - Copies that password managers mark as private are never recorded. In Settings → History you can add apps whose copies Holt ignores.
 - Sync is end-to-end encrypted, and only Macs you paired can connect.
 - To find each other across networks, your Macs use iroh's public discovery and relay servers. Those see your Macs' network addresses, never your clips.
-
-## Troubleshooting
-
-**Holt doesn't record what I copy.** Set Holt to Always Allow in System Settings → Privacy & Security → Paste from Other Apps. While it's missing, the menu bar menu shows Allow Clipboard Access.
-
-**Picking a clip copies it but doesn't paste.** Turn on Holt in System Settings → Privacy & Security → Accessibility. Holt Settings → General shows whether it's on.
-
-**My other Mac doesn't show up under Nearby.** Both Macs need Holt Settings → Devices open and the same network. Also check that Holt is allowed in System Settings → Privacy & Security → Local Network.
-
-**The code didn't match.** Type the code shown on the other Mac, not this one. After 5 wrong codes that code stops working: close Settings on the other Mac and open Devices again for a new one.
-
-**Uninstall.** `brew uninstall --zap --cask holt`. Without Homebrew, quit Holt, drag it to the Trash and delete `~/Library/Application Support/Holt`.
 
 ## Meet Skip
 
