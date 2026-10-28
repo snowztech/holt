@@ -15,7 +15,8 @@ INSERT INTO clips VALUES
   (2, 'https://holt.snowztech.com', 1, $now - 120000, 0, 0, 'mbp', 'MacBook Pro'),
   (3, '  it''s 100% done' || char(10) || 'second line', 0, $now - 5000, 0, 0, 'me', 'This Mac'),
   (4, 'deleted clip', 0, $now, 0, 1, NULL, NULL),
-  (5, '100 percent', 0, $now, 0, 0, NULL, NULL);"
+  (5, '100 percent', 0, $now, 0, 0, NULL, NULL),
+  (6, 'invoice read in a screenshot', 2, $now, 0, 0, NULL, NULL);"
 
 titles() { ./search.sh "$1" | jq -r '[.items[].title] | join("|")'; }
 check() { [[ "$1" == "$2" ]] || { echo "expected '$2', got '$1'" >&2; exit 1; }; }
@@ -24,6 +25,7 @@ check "$(titles "")" "old pinned note|100 percent|it's 100% done|https://holt.sn
 check "$(titles "DONE it's")" "it's 100% done"
 check "$(titles "100%")" "it's 100% done"
 check "$(titles "nothing here")" "No clips match"
+check "$(titles "invoice")" "No clips match"
 check "$(./search.sh holt | jq -r '.items[0].subtitle')" "Copied 2 min ago on MacBook Pro"
 check "$(./search.sh holt | jq -r '.items[0].quicklookurl')" "https://holt.snowztech.com"
 check "$(./search.sh done | jq -r '.items[0].subtitle')" "Copied just now"

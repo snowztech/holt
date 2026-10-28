@@ -21,13 +21,14 @@ for w in ${words[@]+"${words[@]}"}; do
   where+=" AND text LIKE '%$w%' ESCAPE '\\'"
 done
 
+# Image clips (kind 2) are left out until the workflow can paste them.
 sqlite3 -readonly "$db" "
 WITH found AS (
   SELECT text, kind, pinned, created_at,
          ltrim(text, ' ' || char(9, 10, 13)) AS body,
          (strftime('%s', 'now') * 1000 - created_at) / 1000 AS age,
          CASE WHEN copied_by IN (SELECT id FROM peers) THEN copied_on END AS device
-  FROM clips WHERE deleted = 0$where
+  FROM clips WHERE deleted = 0 AND kind != 2$where
   ORDER BY pinned DESC, created_at DESC LIMIT 50
 ),
 items AS (
