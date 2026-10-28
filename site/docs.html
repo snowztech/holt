@@ -240,20 +240,16 @@
         </ul>
 
         <h3>Arrived</h3>
-        <p>Each time Holt sync brought the clip from a paired device. A copy can arrive more than once, for example straight from your iPhone and again from another Mac. Each arrival has two lines.</p>
-        <p>The first line is the device that sent it, and how:</p>
+        <p>One line each time Holt sync brought the clip from a paired device, like <strong>over the internet · 0.1 s later</strong>. A copy can arrive more than once, for example straight from your iPhone and again from another Mac.</p>
+        <p>The line says how it came:</p>
         <ul>
           <li><strong>same network</strong> means it came straight from that device over the network you share, like your home Wi-Fi. It never left that network.</li>
           <li><strong>over the internet</strong> means it came straight from that device, but you were on different networks, like your iPhone on mobile data and your Mac at home. It crossed the internet end-to-end encrypted, the way a video call does, with no server in between.</li>
           <li><strong>via relay</strong> means the two devices couldn't reach each other, usually because a router or firewall was in the way. A relay server run by n0, the makers of iroh, passed the encrypted clip along. It can't read it and doesn't keep it. A relay is a little slower, but it works on any network.</li>
         </ul>
+        <p>Then how long after the copy it got here, like <strong>0.1 s later</strong>. It compares two devices' clocks, so take it as approximate.</p>
+        <p>When the clip came through another device than the one it was copied on, the line starts with that device, like <strong>from MacBook Pro · same network</strong>. Hover over a line for the exact time it arrived and the address it came from: the other device's IP address, or the relay server's name.</p>
         <p>When devices reconnect, they often start through a relay for a moment while they find a direct path. So the first clip after a reconnect can show via relay, and the next ones same network or over the internet. A VPN, like Tailscale, shows as over the internet, though the connection is still direct.</p>
-        <p>The second line, in grey, is when it arrived, how long after the copy, and where from:</p>
-        <ul>
-          <li><strong>16:32:17</strong> is the time it got to this Mac.</li>
-          <li><strong>0.1 s later</strong> is how long after the copy. It compares two devices' clocks, so take it as approximate.</li>
-          <li><strong>The address</strong> is the other device's IP address, or the relay server's name for a relay. It's there for the curious: the label above already says which network it was.</li>
-        </ul>
         <p>No Arrived line means Holt sync didn't bring the clip: it was copied on this Mac, or it came through Universal Clipboard.</p>
       </section>
 
@@ -333,6 +329,10 @@
           <details>
             <summary>Picking a clip copies it but doesn't paste</summary>
             <p>Turn on Holt in System Settings → Privacy &amp; Security → Accessibility. Settings → General in Holt shows whether it's on.</p>
+          </details>
+          <details>
+            <summary>Sending from my iPhone doesn't reach my Mac when it's on a VPN</summary>
+            <p>A VPN like Tailscale can slow down how fast your devices find each other, and a one-press send (Back Tap, Control Center, the Action Button) only gets a few seconds from iOS. Open Holt on your iPhone and tap Paste instead, which gives it time to connect.</p>
           </details>
           <details>
             <summary>The popup says Not connected to iPhone</summary>
