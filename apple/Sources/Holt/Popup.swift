@@ -656,11 +656,7 @@ private struct ClipInfo: View {
             ForEach(Array(arrivals.enumerated()), id: \.offset) { index, arrival in
                 GridRow {
                     label(index == 0 ? "Arrived" : "")
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(route(arrival))
-                        Text(timing(arrival)).foregroundStyle(.tertiary)
-                    }
-                    .help(explain(arrival.path))
+                    Text(describe(arrival)).help(details(arrival))
                 }
             }
         }
@@ -684,13 +680,26 @@ private struct ClipInfo: View {
         return "\(when) on \(clip.device ?? "this Mac")\(app)"
     }
 
-    private func route(_ arrival: Arrival) -> String {
-        switch arrival.path {
-        case .sameNetwork: "\(arrival.from) · same network"
-        case .internet: "\(arrival.from) · over the internet"
-        case .relay: "\(arrival.from) · via relay"
-        case nil: arrival.from
-        }
+    /// One line per arrival. The sender is named only when it isn't the device the
+    /// clip was copied on, like a Mac passing on your iPhone's copy.
+    private func describe(_ arrival: Arrival) -> String {
+        let sender = arrival.from == clip.device ? nil : "from \(arrival.from)"
+        let path: String? =
+            switch arrival.path {
+            case .sameNetwork: "same network"
+            case .internet: "over the internet"
+            case .relay: "via relay"
+            case nil: nil
+            }
+        let parts = [sender, path, delay(arrival.arrivedAt - arrival.copiedAt)].compactMap { $0 }
+        return parts.isEmpty ? "synced" : parts.joined(separator: " · ")
+    }
+
+    /// The hover text: what the path means, then the exact time and address for the curious.
+    private func details(_ arrival: Arrival) -> String {
+        let arrived = exactTime(Date(timeIntervalSince1970: TimeInterval(arrival.arrivedAt) / 1000))
+        let address = arrival.address.map { arrival.path == .relay ? " through \($0)" : " from \($0)" } ?? ""
+        return "\(explain(arrival.path))\n\nArrived at \(arrived)\(address)."
     }
 
     private func explain(_ path: ArrivalPath?) -> String {
@@ -701,13 +710,6 @@ private struct ClipInfo: View {
             "The devices couldn't reach each other, so a relay server passed the clip along, encrypted. It can't read it. A router or firewall is usually in the way."
         case nil: "Synced by Holt."
         }
-    }
-
-    private func timing(_ arrival: Arrival) -> String {
-        let arrived = Date(timeIntervalSince1970: TimeInterval(arrival.arrivedAt) / 1000)
-        return [exactTime(arrived), delay(arrival.arrivedAt - arrival.copiedAt), arrival.address]
-            .compactMap { $0 }
-            .joined(separator: " · ")
     }
 
     /// How long after the copy it got here. Clocks differ a little between devices,
