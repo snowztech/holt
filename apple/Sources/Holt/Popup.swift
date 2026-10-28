@@ -345,7 +345,7 @@ struct PopupView: View {
                     list
                     Divider()
                     if let clip = model.selected {
-                        ClipPreview(clip: clip).frame(width: 300)
+                        ClipPreview(clip: clip, query: model.query).frame(width: 300)
                     }
                 }
             }
@@ -409,18 +409,13 @@ private struct ClipRow: View {
             if let image = clip.image {
                 Thumbnail(data: image.thumb, maxWidth: 40, maxHeight: 24)
             }
-            Text(highlight(rowLabel(clip), query))
+            // An image's recognized text is for search and the preview. As a title it's
+            // mostly noise, especially on photos.
+            Text(highlight(clip.image.map(imageLabel) ?? oneLine(clip.text), query))
                 .font(.system(size: 13.5))
-                .foregroundStyle(clip.image != nil && clip.text.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 12)
-            if let image = clip.image, !clip.text.isEmpty {
-                Text(dimensions(image))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
             if clip.pinned {
                 Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Brand.river)
             }
@@ -454,6 +449,7 @@ private struct ClipRow: View {
 
 private struct ClipPreview: View {
     let clip: Clip
+    let query: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -463,23 +459,25 @@ private struct ClipPreview: View {
             }
 
             if let image = clip.image {
-                ImagePreview(image: image)
+                // Takes the room the text below doesn't need.
+                ImagePreview(image: image).layoutPriority(1)
                 Text("\(dimensions(image)) · \(image.format.uppercased()) · \(fileSize(image.bytes))")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
-                if !clip.text.isEmpty {
-                    // The first lines only, and not selectable: laying out a screenshot's
-                    // worth of recognized text costs hundreds of milliseconds per keypress.
-                    // The whole text is still what search matches.
-                    Text(recognizedExcerpt)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Spacer(minLength: 0)
-                } else {
-                    Spacer(minLength: 0)
+                // The recognized text shows why a search matched. Browsing, the picture says enough.
+                if let excerpt = recognizedExcerpt {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Text in image").font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary)
+                        // A few lines, not selectable: laying out a screenshot's worth of
+                        // recognized text costs hundreds of milliseconds per keypress.
+                        Text(highlight(excerpt, query))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                Spacer(minLength: 0)
             } else if clip.kind == .link {
                 linkCard
                 Spacer(minLength: 0)
@@ -505,10 +503,14 @@ private struct ClipPreview: View {
 
     private var lineCount: Int { clip.text.split(whereSeparator: \.isNewline).count }
 
-    private var recognizedExcerpt: String {
+    /// While searching, the lines that match first.
+    private var recognizedExcerpt: String? {
+        let words = query.lowercased().split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty, !clip.text.isEmpty else { return nil }
         let lines = clip.text.split(whereSeparator: \.isNewline)
-        let excerpt = lines.prefix(12).map { String($0.prefix(120)) }.joined(separator: "\n")
-        return lines.count > 12 ? excerpt + "\n…" : excerpt
+        let matching = lines.filter { line in words.contains { line.lowercased().contains($0) } }
+        let shown = (matching.isEmpty ? lines : matching).prefix(6)
+        return shown.map { String($0.prefix(120)) }.joined(separator: "\n")
     }
     private var isShort: Bool { lineCount <= 1 && clip.text.count <= 90 }
 
@@ -655,10 +657,10 @@ private struct ImagePreview: View {
                 Image(nsImage: picture)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: 240, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(maxWidth: .infinity)
         .task(id: image.path) {
             let key = image.path as NSString
             if let cached = Self.cache.object(forKey: key) {
@@ -681,6 +683,7 @@ enum AppInfo {
 
     static func name(_ bundleID: String?) -> String? {
         guard let bundleID else { return nil }
+        if bundleID == ClipboardWatcher.universalClipboard { return "Universal Clipboard" }
         if let cached = names[bundleID] { return cached }
         let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
         let name = url.map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
@@ -800,12 +803,6 @@ func dragImage(for clip: Clip) -> NSImage {
     }
 }
 
-/// One line for the list: the text, or the text read in an image, or its size.
-private func rowLabel(_ clip: Clip) -> String {
-    if let image = clip.image, clip.text.isEmpty { return imageLabel(image) }
-    return oneLine(clip.text)
-}
-
 private func date(_ clip: Clip) -> Date {
     Date(timeIntervalSince1970: TimeInterval(clip.createdAt) / 1000)
 }
@@ -837,7 +834,10 @@ private let relative: RelativeDateTimeFormatter = {
 }()
 
 private func longAge(_ clip: Clip) -> String {
-    relative.localizedString(for: date(clip), relativeTo: Date())
+    // Under a minute, or from a Mac whose clock runs ahead, it would read "in 0 seconds".
+    let now = Date()
+    let copied = min(date(clip), now)
+    return now.timeIntervalSince(copied) < 60 ? "just now" : relative.localizedString(for: copied, relativeTo: now)
 }
 
 func oneLine(_ text: String) -> String {

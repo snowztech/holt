@@ -47,6 +47,24 @@ final class ImagesTests: XCTestCase {
         XCTAssertLessThan(image.thumb.count, 20_000)
     }
 
+    func testSidewaysPhotoIsMeasuredAndPastedTheRightWayUp() throws {
+        // How a phone stores a portrait photo: landscape pixels, and orientation 6 to turn them.
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, picture(width: 40, height: 20), [kCGImagePropertyOrientation: 6] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let jpeg = data as Data
+
+        let image = try XCTUnwrap(Images.prepare(RawImage(data: jpeg, type: Images.jpeg)))
+        XCTAssertEqual(image.width, 20)
+        XCTAssertEqual(image.height, 40)
+
+        let png = try XCTUnwrap(Images.pasteboardItem(bytes: jpeg, format: "jpeg", sourceApp: nil).data(forType: .png))
+        let pasted = try XCTUnwrap(NSBitmapImageRep(data: png))
+        XCTAssertEqual(pasted.pixelsWide, 20)
+        XCTAssertEqual(pasted.pixelsHigh, 40)
+    }
+
     func testRejectsBytesThatAreNotAnImage() {
         XCTAssertNil(Images.prepare(RawImage(data: Data("hello".utf8), type: .png)))
     }
@@ -75,12 +93,32 @@ final class ImagesTests: XCTestCase {
         let png = try XCTUnwrap(encode(picture(width: 8, height: 8), as: .png))
         try png.write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
+        // What Finder puts on the clipboard: the URL, the name as text, the icon as TIFF.
         let item = NSPasteboardItem()
         item.setString(url.absoluteString, forType: .fileURL)
+        item.setString(url.lastPathComponent, forType: .string)
+        item.setData(try XCTUnwrap(NSBitmapImageRep(cgImage: picture(width: 4, height: 4)).tiffRepresentation), forType: .tiff)
 
-        let raw = try XCTUnwrap(Images.raw(in: item))
+        let raw = try XCTUnwrap(Images.file(in: item))
         XCTAssertEqual(raw.type, .fileURL)
         XCTAssertEqual(raw.data, png)
+    }
+
+    func testSkipsFilesThatAreNotImagesOrTooBig() throws {
+        let dir = FileManager.default.temporaryDirectory
+        let text = dir.appendingPathComponent("holt-test-\(UUID()).txt")
+        let huge = dir.appendingPathComponent("holt-test-\(UUID()).png")
+        try Data("notes".utf8).write(to: text)
+        try Data(count: Images.maxBytes + 1).write(to: huge)
+        defer {
+            try? FileManager.default.removeItem(at: text)
+            try? FileManager.default.removeItem(at: huge)
+        }
+        for url in [text, huge] {
+            let item = NSPasteboardItem()
+            item.setString(url.absoluteString, forType: .fileURL)
+            XCTAssertNil(Images.file(in: item), url.lastPathComponent)
+        }
     }
 
     func testPastesPNGAndTIFFForEveryApp() throws {
@@ -124,6 +162,25 @@ final class ImagesTests: XCTestCase {
         guard let destination = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else { return nil }
         CGImageDestinationAddImage(destination, image, nil)
         return CGImageDestinationFinalize(destination) ? data as Data : nil
+    }
+}
+
+final class SourceTests: XCTestCase {
+    @MainActor
+    func testSaysWhereACopyCameFrom() {
+        let plain = NSPasteboardItem()
+        plain.setString("hi", forType: .string)
+        XCTAssertEqual(ClipboardWatcher.source(of: [plain], frontmost: "com.apple.TextEdit"), "com.apple.TextEdit")
+        XCTAssertNil(ClipboardWatcher.source(of: [plain], frontmost: Bundle.main.bundleIdentifier))
+
+        let named = NSPasteboardItem()
+        named.setString("com.apple.Safari", forType: Images.source)
+        XCTAssertEqual(ClipboardWatcher.source(of: [named], frontmost: "com.apple.TextEdit"), "com.apple.Safari")
+
+        let remote = NSPasteboardItem()
+        remote.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardWatcher.universalClipboard))
+        XCTAssertEqual(ClipboardWatcher.source(of: [remote], frontmost: "com.apple.TextEdit"), ClipboardWatcher.universalClipboard)
+        XCTAssertEqual(AppInfo.name(ClipboardWatcher.universalClipboard), "Universal Clipboard")
     }
 }
 
