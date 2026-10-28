@@ -47,6 +47,24 @@ final class ImagesTests: XCTestCase {
         XCTAssertLessThan(image.thumb.count, 20_000)
     }
 
+    func testSidewaysPhotoIsMeasuredAndPastedTheRightWayUp() throws {
+        // How a phone stores a portrait photo: landscape pixels, and orientation 6 to turn them.
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, picture(width: 40, height: 20), [kCGImagePropertyOrientation: 6] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let jpeg = data as Data
+
+        let image = try XCTUnwrap(Images.prepare(RawImage(data: jpeg, type: Images.jpeg)))
+        XCTAssertEqual(image.width, 20)
+        XCTAssertEqual(image.height, 40)
+
+        let png = try XCTUnwrap(Images.pasteboardItem(bytes: jpeg, format: "jpeg", sourceApp: nil).data(forType: .png))
+        let pasted = try XCTUnwrap(NSBitmapImageRep(data: png))
+        XCTAssertEqual(pasted.pixelsWide, 20)
+        XCTAssertEqual(pasted.pixelsHigh, 40)
+    }
+
     func testRejectsBytesThatAreNotAnImage() {
         XCTAssertNil(Images.prepare(RawImage(data: Data("hello".utf8), type: .png)))
     }

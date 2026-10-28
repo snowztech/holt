@@ -86,11 +86,16 @@ enum Images {
         case UTType.heic.identifier:
             (bytes, format) = (raw.data, "heic")
         default:
-            guard let png = encode(source, as: .png, keepingDPIOf: properties) else { return nil }
+            guard let png = encode(source, as: .png) else { return nil }
             (bytes, format) = (png, "png")
         }
         guard bytes.count <= maxBytes, let thumb = thumbnail(source) else { return nil }
-        return CopiedImage(bytes: bytes, format: format, width: UInt32(width), height: UInt32(height), thumb: thumb)
+        // Phones store most photos sideways with a flag to turn them (orientations 5 to 8).
+        // The size is the one people see.
+        let sideways = (5...8).contains(properties[kCGImagePropertyOrientation] as? Int ?? 1)
+        let (shownWidth, shownHeight) = sideways ? (height, width) : (width, height)
+        return CopiedImage(
+            bytes: bytes, format: format, width: UInt32(shownWidth), height: UInt32(shownHeight), thumb: thumb)
     }
 
     /// The text in the image, line by line, so search finds screenshots by
@@ -118,7 +123,7 @@ enum Images {
             png = bytes
         case "jpeg", "heic":
             item.setData(bytes, forType: format == "jpeg" ? jpeg : heic)
-            png = CGImageSourceCreateWithData(bytes as CFData, nil).flatMap { encode($0, as: .png, keepingDPIOf: [:]) }
+            png = CGImageSourceCreateWithData(bytes as CFData, nil).flatMap { encode($0, as: .png) }
         default:
             png = nil
         }
@@ -171,8 +176,14 @@ enum Images {
 
     /// Re-encodes the first image of `source`, keeping its DPI so a Retina
     /// screenshot pastes at the size it was taken.
-    private static func encode(_ source: CGImageSource, as type: UTType, keepingDPIOf properties: [CFString: Any]) -> Data? {
-        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+    /// Re-encoded the right way up: a photo's rotation flag doesn't carry over to
+    /// the new file, so the pixels are turned instead. DPI is kept.
+    private static func encode(_ source: CGImageSource, as type: UTType) -> Data? {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+            let width = properties[kCGImagePropertyPixelWidth] as? Int,
+            let height = properties[kCGImagePropertyPixelHeight] as? Int,
+            let image = thumbnail(source, maxPixels: max(width, height))
+        else { return nil }
         var dpi: [CFString: Any] = [:]
         if let width = properties[kCGImagePropertyDPIWidth], let height = properties[kCGImagePropertyDPIHeight] {
             dpi = [kCGImagePropertyDPIWidth: width, kCGImagePropertyDPIHeight: height]
