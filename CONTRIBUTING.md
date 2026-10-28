@@ -18,6 +18,8 @@ The Makefile signs with your Apple Development certificate if you have one. That
 
 ## How it fits together
 
+[docs/architecture.md](docs/architecture.md) explains how capture, pairing and sync work, with diagrams. The code is laid out like this:
+
 ```
 core/holt-core/        Rust
   src/lib.rs           Store: SQLite history, search, and the sync merge rules

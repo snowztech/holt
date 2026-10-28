@@ -379,7 +379,12 @@ async fn send_changes(
                 *seen = (*seen).max(last);
             }
         }
-        changes.changed().await?;
+        // Another process can write to the same database without waking this one,
+        // like an iPhone's share sheet or Control Center button, so look again now and then.
+        tokio::select! {
+            r = changes.changed() => r?,
+            _ = tokio::time::sleep(Duration::from_secs(2)) => {}
+        }
     }
 }
 
@@ -407,7 +412,11 @@ fn batches(rows: Vec<Row>) -> Vec<Vec<Row>> {
     let mut out: Vec<Vec<Row>> = vec![];
     let mut size = 0;
     for row in rows {
-        let len = row.text.as_ref().map_or(0, |t| t.len()) + 200;
+        // An image row carries its bytes, so it fills a message on its own.
+        let len = row.text.as_ref().map_or(0, |t| t.len())
+            + row.image.as_ref().map_or(0, |i| i.len())
+            + row.thumb.as_ref().map_or(0, |t| t.len())
+            + 200;
         if out.is_empty() || size + len > BATCH_BYTES {
             out.push(vec![]);
             size = 0;
@@ -740,6 +749,39 @@ mod tests {
             "took {:?}",
             start.elapsed()
         );
+    }
+
+    /// On an iPhone the share sheet and the Control Center button run in their own
+    /// processes, writing to the app's database. The app has to send those clips too.
+    #[test]
+    fn clips_another_process_writes_reach_peers() {
+        let path = std::env::temp_dir().join(format!("holt-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let phone = Node::start_with(
+            Store::open(path.to_string_lossy().into()).unwrap(),
+            "iPhone".into(),
+            true,
+        )
+        .unwrap();
+        let mac = node("Mac");
+        phone
+            .inner
+            .memory
+            .add_endpoint_info(mac.inner.endpoint.addr());
+        mac.inner
+            .memory
+            .add_endpoint_info(phone.inner.endpoint.addr());
+        phone.pair(mac.device_id(), mac.start_pairing()).unwrap();
+        wait_until("phone and mac to connect", || {
+            mac.devices().unwrap().iter().any(|d| d.online)
+        });
+
+        let extension = Store::open(path.to_string_lossy().into()).unwrap();
+        extension.add("from the share sheet".into(), None).unwrap();
+        wait_until("mac to get the extension's clip", || {
+            texts(&mac) == ["from the share sheet"]
+        });
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

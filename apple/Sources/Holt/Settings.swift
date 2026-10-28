@@ -178,6 +178,7 @@ private struct GeneralTab: View {
 private struct HistoryTab: View {
     @ObservedObject var model: SettingsModel
     @AppStorage(Prefs.historyDaysKey) private var historyDays = 30
+    @AppStorage(Prefs.recordImagesKey) private var recordImages = true
     @State private var confirmingClear = false
 
     var body: some View {
@@ -192,6 +193,13 @@ private struct HistoryTab: View {
                 .onChange(of: historyDays) { model.onHistoryChange() }
             } footer: {
                 Text("Pinned clips are kept forever. Copies that password managers mark as private are never recorded.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Record images", isOn: $recordImages)
+            } footer: {
+                Text("Screenshots and copied pictures, up to 10 MB each. The text in them is read on this Mac, so search finds it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

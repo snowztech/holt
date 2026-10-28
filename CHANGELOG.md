@@ -8,6 +8,18 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 - An Alfred workflow. Type `holt` in Alfred to search your history and paste from it. It needs Alfred's Powerpack.
 
+## [0.1.3] - 2026-10-27
+
+Clips you save from Raycast now sync too.
+
+### Changed
+
+- The update window shows what's new in the release, instead of opening the GitHub page.
+
+### Fixed
+
+- Clips that the Raycast extension adds reach your other devices right away. Before, they waited until you copied something on the Mac.
+
 ## [0.1.2] - 2026-10-27
 
 Holt for Mac is ready for the iPhone app, which is in testing now.
@@ -49,7 +61,8 @@ The first release. Holt keeps everything you copy on your Mac, and pairs your Ma
 - A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
 - Settings to change the shortcut and choose how long to keep history.
 
-[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/snowztech/holt/releases/tag/v0.1.3
 [0.1.2]: https://github.com/snowztech/holt/releases/tag/v0.1.2
 [0.1.1]: https://github.com/snowztech/holt/releases/tag/v0.1.1
 [0.1.0]: https://github.com/snowztech/holt/releases/tag/v0.1.0

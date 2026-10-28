@@ -13,6 +13,7 @@ name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
+base64 = "0.22"
 blake3 = "1.8"
 iroh = "1.4"
 iroh-mdns-address-lookup = "0.6"

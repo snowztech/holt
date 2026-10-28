@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct HoltApp: App {
     @State private var library = Library()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -14,6 +15,9 @@ struct HoltApp: App {
                     library.pendingPairing = PairingLink(url.absoluteString)
                 }
                 // For development: `-HoltPairLink "holt://pair?…"` pairs as if the Camera opened it.
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { library.checkForNewCopy() }
+                }
                 .task {
                     Appearance.apply()
                     if let link = UserDefaults.standard.string(forKey: "HoltPairLink") {

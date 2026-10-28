@@ -27,6 +27,7 @@ let package = Package(
                 .linkedFramework("Security"),
             ]
         ),
+        .testTarget(name: "HoltTests", dependencies: ["Holt"]),
     ],
     swiftLanguageModes: [.v5]
 )
