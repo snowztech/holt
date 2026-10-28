@@ -641,8 +641,8 @@ struct SourceIcon: View {
 }
 
 /// ⌘I: where a clip was copied, and each time it reached this Mac from a paired
-/// device, directly or through a relay. For telling Universal Clipboard from Holt
-/// sync, and for seeing why a sync was slow.
+/// device: on the same network, over the internet or through a relay. For telling
+/// Universal Clipboard from Holt sync, and for seeing why a sync was slow.
 private struct ClipInfo: View {
     let clip: Clip
     let arrivals: [Arrival]
@@ -686,7 +686,8 @@ private struct ClipInfo: View {
 
     private func route(_ arrival: Arrival) -> String {
         switch arrival.path {
-        case .direct: "\(arrival.from) · direct"
+        case .sameNetwork: "\(arrival.from) · same network"
+        case .internet: "\(arrival.from) · over the internet"
         case .relay: "\(arrival.from) · via relay"
         case nil: arrival.from
         }
@@ -694,7 +695,8 @@ private struct ClipInfo: View {
 
     private func explain(_ path: ArrivalPath?) -> String {
         switch path {
-        case .direct: "Sent straight to this Mac, with no server in between. The address shows if it was this network or the internet."
+        case .sameNetwork: "Sent straight to this Mac over the network you share. It never left it."
+        case .internet: "Sent straight to this Mac across the internet, end-to-end encrypted, with no server in between."
         case .relay:
             "The devices couldn't reach each other, so a relay server passed the clip along, encrypted. It can't read it. A router or firewall is usually in the way."
         case nil: "Synced by Holt."
