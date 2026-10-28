@@ -431,13 +431,18 @@ impl Store {
     }
 
     /// Writes the bytes unless the file is already there: the same image copied
-    /// again has the same key, so the same file.
+    /// again has the same key, so the same file. Read-only, because ⌘O opens it
+    /// in Preview, and an edit saved in place would no longer match its key.
     fn write_image_file(&self, key: &str, format: &str, bytes: &[u8]) -> Result<()> {
         let path = self.image_path(key, format);
         if path.exists() {
             return Ok(());
         }
-        std::fs::write(&path, bytes).map_err(|e| HoltError::Db(format!("{}: {e}", path.display())))
+        let err = |e: std::io::Error| HoltError::Db(format!("{}: {e}", path.display()));
+        std::fs::write(&path, bytes).map_err(err)?;
+        let mut perms = std::fs::metadata(&path).map_err(err)?.permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&path, perms).map_err(err)
     }
 
     /// Removes any file in `images/` that no live image clip points to: leftovers
@@ -1114,6 +1119,10 @@ mod tests {
         assert_eq!(image.format, "png");
         assert_eq!(image.thumb, vec![1, 2, 3]);
         assert_eq!(std::fs::read(&image.path).unwrap(), PNG);
+        assert!(std::fs::metadata(&image.path)
+            .unwrap()
+            .permissions()
+            .readonly());
         assert!(image
             .path
             .ends_with(&format!("{}.png", blake3::hash(PNG).to_hex())));
