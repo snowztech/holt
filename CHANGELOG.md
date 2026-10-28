@@ -4,6 +4,18 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-28
+
+The ⌘I panel in plain words.
+
+### Changed
+
+- The ⌘I panel says whether a clip came over the same network, over the internet or through a relay, in one line per arrival. Hover over a line for the exact time and address.
+
+### Fixed
+
+- ⌘, opens Settings while the popup is open.
+
 ## [0.1.6] - 2026-10-28
 
 See how a clip got to your Mac.
@@ -93,7 +105,8 @@ The first release. Holt keeps everything you copy on your Mac, and pairs your Ma
 - A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
 - Settings to change the shortcut and choose how long to keep history.
 
-[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/snowztech/holt/releases/tag/v0.1.7
 [0.1.6]: https://github.com/snowztech/holt/releases/tag/v0.1.6
 [0.1.5]: https://github.com/snowztech/holt/releases/tag/v0.1.5
 [0.1.4]: https://github.com/snowztech/holt/releases/tag/v0.1.4
