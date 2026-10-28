@@ -4,8 +4,16 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-28
+
+Holt keeps the images you copy now, and works from Alfred.
+
 ### Added
 
+- Screenshots and images you copy are kept in your history, and search finds them by the text in them. Turn it off in Settings → History.
+- Press Space on an image in the popup or the menu bar menu to see it full size. ⌘O opens it in Preview.
+- Drag a clip out of the popup or the menu bar menu into any app.
+- Images sync to your other devices once they run this version too.
 - An Alfred workflow. Type `holt` in Alfred to search your history and paste from it. It needs Alfred's Powerpack.
 
 ## [0.1.3] - 2026-10-27
@@ -61,7 +69,8 @@ The first release. Holt keeps everything you copy on your Mac, and pairs your Ma
 - A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
 - Settings to change the shortcut and choose how long to keep history.
 
-[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/snowztech/holt/releases/tag/v0.1.4
 [0.1.3]: https://github.com/snowztech/holt/releases/tag/v0.1.3
 [0.1.2]: https://github.com/snowztech/holt/releases/tag/v0.1.2
 [0.1.1]: https://github.com/snowztech/holt/releases/tag/v0.1.1
