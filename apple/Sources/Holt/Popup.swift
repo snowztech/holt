@@ -409,18 +409,13 @@ private struct ClipRow: View {
             if let image = clip.image {
                 Thumbnail(data: image.thumb, maxWidth: 40, maxHeight: 24)
             }
-            Text(highlight(rowLabel(clip), query))
+            // An image's recognized text is for search and the preview. As a title it's
+            // mostly noise, especially on photos.
+            Text(highlight(clip.image.map(imageLabel) ?? oneLine(clip.text), query))
                 .font(.system(size: 13.5))
-                .foregroundStyle(clip.image != nil && clip.text.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 12)
-            if let image = clip.image, !clip.text.isEmpty {
-                Text(dimensions(image))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
             if clip.pinned {
                 Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Brand.river)
             }
@@ -798,12 +793,6 @@ func dragImage(for clip: Clip) -> NSImage {
         text.draw(at: NSPoint(x: 8, y: 4), withAttributes: attributes)
         return true
     }
-}
-
-/// One line for the list: the text, or the text read in an image, or its size.
-private func rowLabel(_ clip: Clip) -> String {
-    if let image = clip.image, clip.text.isEmpty { return imageLabel(image) }
-    return oneLine(clip.text)
 }
 
 private func date(_ clip: Clip) -> Date {
