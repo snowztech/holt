@@ -4,6 +4,14 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-28
+
+See how a clip got to your Mac.
+
+### Added
+
+- Press ⌘I in the popup to see when and where a clip was copied, and how it reached this Mac: through Universal Clipboard, or from a paired device directly or through a relay, and how long that took.
+
 ## [0.1.5] - 2026-10-28
 
 Images work the way you'd expect: from Finder, from your iPhone, and the right way up.
@@ -85,7 +93,8 @@ The first release. Holt keeps everything you copy on your Mac, and pairs your Ma
 - A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
 - Settings to change the shortcut and choose how long to keep history.
 
-[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/snowztech/holt/releases/tag/v0.1.6
 [0.1.5]: https://github.com/snowztech/holt/releases/tag/v0.1.5
 [0.1.4]: https://github.com/snowztech/holt/releases/tag/v0.1.4
 [0.1.3]: https://github.com/snowztech/holt/releases/tag/v0.1.3
