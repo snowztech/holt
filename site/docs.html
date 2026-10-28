@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Docs, Holt</title>
-  <meta name="description" content="How to use Holt: search and paste your clipboard history, pins, images, sync between Macs, Alfred, settings and shortcuts." />
+  <meta name="description" content="How to use Holt: search and paste your clipboard history, pins, images, sync between Macs, Raycast and Alfred, settings and shortcuts." />
   <meta property="og:title" content="Holt docs" />
   <meta property="og:description" content="How to use Holt, the clipboard history for macOS that syncs between your Macs." />
   <meta property="og:image" content="https://holt.snowztech.com/assets/og.png" />
@@ -82,7 +82,7 @@
         <li><a href="#pins">Pins</a></li>
         <li><a href="#images">Images</a></li>
         <li><a href="#sync">Sync between Macs</a></li>
-        <li><a href="#alfred">Alfred and Raycast</a></li>
+        <li><a href="#launchers">Raycast and Alfred</a></li>
         <li><a href="#settings">Settings</a></li>
         <li><a href="#shortcuts">Keyboard shortcuts</a></li>
         <li><a href="#privacy">Privacy</a></li>
@@ -162,7 +162,7 @@
           <li><strong>Open it.</strong> <kbd class="sn-kbd">⌘O</kbd> opens the image in Preview. Holt's copy is read-only, so it stays as you copied it. Duplicate it in Preview to edit.</li>
           <li><strong>Paste it.</strong> <kbd class="sn-kbd">↩</kbd> pastes the image itself, and dragging it out drops the file.</li>
         </ul>
-        <p>Images sync to your other Macs once they run Holt 0.1.4 or later. To stop keeping images, turn off Record images in Settings → History. Alfred doesn't show images yet.</p>
+        <p>Images sync to your other Macs once they run Holt 0.1.4 or later. To stop keeping images, turn off Record images in Settings → History. Raycast and Alfred don't show images yet.</p>
       </section>
 
       <section id="sync">
@@ -190,14 +190,15 @@
         <p>Sync is end-to-end encrypted and never uses Bluetooth. Only Macs you paired can connect.</p>
       </section>
 
-      <section id="alfred">
-        <h2>Alfred and Raycast</h2>
-        <h3>Alfred</h3>
-        <p>This needs Alfred's Powerpack. <a href="https://github.com/snowztech/holt/releases/latest/download/Holt.alfredworkflow">Download the Holt workflow</a> and open it to install. Type <code>holt</code> and what you're looking for. It uses the same search as Holt: every word has to match, and pinned clips come first.</p>
-        <p><kbd class="sn-kbd">↩</kbd> pastes the clip, and <kbd class="sn-kbd">⌘↩</kbd> copies it without pasting. The workflow reads the history Holt keeps on your Mac, so Holt needs to be installed.</p>
+      <section id="launchers">
+        <h2>Raycast and Alfred</h2>
+        <p>Both read the history Holt keeps on your Mac, so Holt needs to be installed. They use the same search: every word has to match, and pinned clips come first.</p>
 
         <h3>Raycast</h3>
-        <p>A Holt extension for Raycast is waiting for review in the Raycast Store. You can <a href="https://github.com/raycast/extensions/pull/32826">follow it on GitHub</a>.</p>
+        <p>Run Search Clipboard History from the Holt extension. <kbd class="sn-kbd">↩</kbd> pastes the clip, and the action panel can copy it instead or open a link. The extension is waiting for review in the Raycast Store. You can <a href="https://github.com/raycast/extensions/pull/32826">follow it on GitHub</a>.</p>
+
+        <h3>Alfred</h3>
+        <p>This needs Alfred's Powerpack. <a href="https://github.com/snowztech/holt/releases/latest/download/Holt.alfredworkflow">Download the Holt workflow</a> and open it to install. Type <code>holt</code> and what you're looking for. <kbd class="sn-kbd">↩</kbd> pastes the clip, and <kbd class="sn-kbd">⌘↩</kbd> copies it without pasting.</p>
       </section>
 
       <section id="settings">
