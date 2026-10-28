@@ -77,10 +77,11 @@ pub struct IncomingCopy {
     pub image_format: Option<String>,
 }
 
-/// The network path a synced clip took to reach this device.
+/// The network path a synced clip took to reach this device: straight from
+/// the other device, or forwarded by a relay server because they couldn't
+/// reach each other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ArrivalPath {
-    LocalNetwork,
     Direct,
     Relay,
 }
@@ -88,14 +89,13 @@ pub enum ArrivalPath {
 impl ArrivalPath {
     fn as_str(self) -> &'static str {
         match self {
-            ArrivalPath::LocalNetwork => "local-network",
             ArrivalPath::Direct => "direct",
             ArrivalPath::Relay => "relay",
         }
     }
 
     fn parse(stored: &str) -> Option<Self> {
-        [Self::LocalNetwork, Self::Direct, Self::Relay]
+        [Self::Direct, Self::Relay]
             .into_iter()
             .find(|p| p.as_str() == stored)
     }
@@ -108,8 +108,8 @@ pub struct Arrival {
     /// The device that sent it. It may be passing on another device's copy.
     pub from: String,
     pub path: Option<ArrivalPath>,
-    /// The relay server's host, when `path` is a relay.
-    pub relay: Option<String>,
+    /// The relay server's host, or the other device's IP address on a direct path.
+    pub address: Option<String>,
     /// Unix time in milliseconds it was copied, on the copying device's clock.
     pub copied_at: i64,
     /// Unix time in milliseconds it got here.
@@ -121,7 +121,7 @@ pub struct Arrival {
 pub(crate) struct Delivery {
     pub peer: String,
     pub path: Option<ArrivalPath>,
-    pub relay: Option<String>,
+    pub address: Option<String>,
 }
 
 #[derive(Debug, uniffi::Error)]
@@ -418,12 +418,12 @@ impl Store {
         Ok((old + extra) as u32)
     }
 
-    /// How a clip reached this device from paired devices, newest first. Empty
-    /// for a clip copied here.
+    /// How a clip reached this device from paired devices, the last five in the
+    /// order they came. Empty for a clip copied here.
     pub fn arrivals(&self, id: i64) -> Result<Vec<Arrival>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT coalesce(p.name, a.peer), a.path, a.relay, a.copied_at, a.at
+            "SELECT coalesce(p.name, a.peer), a.path, a.address, a.copied_at, a.at
              FROM arrivals a JOIN clips c ON c.key = a.key LEFT JOIN peers p ON p.id = a.peer
              WHERE c.id = ?1 ORDER BY a.at DESC LIMIT 5",
         )?;
@@ -434,12 +434,14 @@ impl Store {
                     .get::<_, Option<String>>(1)?
                     .as_deref()
                     .and_then(ArrivalPath::parse),
-                relay: r.get(2)?,
+                address: r.get(2)?,
                 copied_at: r.get(3)?,
                 arrived_at: r.get(4)?,
             })
         })?;
-        Ok(rows.collect::<std::result::Result<_, _>>()?)
+        let mut arrivals: Vec<Arrival> = rows.collect::<std::result::Result<_, _>>()?;
+        arrivals.reverse();
+        Ok(arrivals)
     }
 
     /// The newest clip that just arrived from another device, if there is one
@@ -695,14 +697,14 @@ impl Store {
                 // came through Universal Clipboard first still shows it arrived here too.
                 if let (Some(d), false) = (delivery, row.deleted) {
                     tx.execute(
-                        "INSERT OR IGNORE INTO arrivals (key, copied_at, peer, path, relay, at)
+                        "INSERT OR IGNORE INTO arrivals (key, copied_at, peer, path, address, at)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                         params![
                             row.key,
                             row.created_at,
                             d.peer,
                             d.path.map(ArrivalPath::as_str),
-                            d.relay,
+                            d.address,
                             now
                         ],
                     )?;
@@ -931,7 +933,7 @@ fn migrate(conn: &mut Connection) -> Result<[u8; 32]> {
                  copied_at INTEGER NOT NULL,
                  peer TEXT NOT NULL,
                  path TEXT,
-                 relay TEXT,
+                 address TEXT,
                  at INTEGER NOT NULL,
                  PRIMARY KEY (key, copied_at, peer)
              ) WITHOUT ROWID;
@@ -1230,7 +1232,7 @@ mod tests {
         let delivery = Delivery {
             peer: from.device_id(),
             path: Some(path),
-            relay: (path == ArrivalPath::Relay).then(|| "euw1-1.relay.n0.iroh.link".into()),
+            address: (path == ArrivalPath::Relay).then(|| "euw1-1.relay.n0.iroh.link".into()),
         };
         let cursors = to.cursors().unwrap();
         for origin in from.origins().unwrap() {
@@ -1256,7 +1258,7 @@ mod tests {
         assert_eq!(arrivals[0].from, "MacBook Pro");
         assert_eq!(arrivals[0].path, Some(ArrivalPath::Relay));
         assert_eq!(
-            arrivals[0].relay.as_deref(),
+            arrivals[0].address.as_deref(),
             Some("euw1-1.relay.n0.iroh.link")
         );
         assert_eq!(arrivals[0].copied_at, on_a.created_at);
@@ -1265,14 +1267,14 @@ mod tests {
 
         // A pin is the same copy, so it adds nothing. Copying it again does.
         a.set_pinned(on_a.id, true).unwrap();
-        sync_via(&a, &b, ArrivalPath::Direct);
+        sync_via(&a, &b, ArrivalPath::Relay);
         assert_eq!(b.arrivals(on_b.id).unwrap().len(), 1);
         tick();
         a.add("hello".into(), None).unwrap();
-        sync_via(&a, &b, ArrivalPath::LocalNetwork);
+        sync_via(&a, &b, ArrivalPath::Direct);
         let arrivals = b.arrivals(on_b.id).unwrap();
         assert_eq!(arrivals.len(), 2);
-        assert_eq!(arrivals[0].path, Some(ArrivalPath::LocalNetwork));
+        assert_eq!(arrivals[1].path, Some(ArrivalPath::Direct));
     }
 
     #[test]
