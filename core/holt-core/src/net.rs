@@ -10,20 +10,21 @@
 //! and keeps sending as clips change.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use iroh::address_lookup::{MemoryLookup, UserData};
 use iroh::endpoint::{presets, Connection, RecvStream, SendStream};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
-use iroh::{Endpoint, EndpointId, RelayMode, SecretKey};
+use iroh::{Endpoint, EndpointId, RelayMode, SecretKey, TransportAddr};
 use iroh_mdns_address_lookup::{DiscoveryEvent, MdnsAddressLookup};
 use n0_future::StreamExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use spake2::{Ed25519Group, Identity, Password, Spake2};
 use tokio::task::JoinHandle;
 
-use crate::{HoltError, Result, Row, Store};
+use crate::{ArrivalPath, Delivery, HoltError, Result, Row, Store};
 
 const SYNC_ALPN: &[u8] = b"holt/sync/1";
 const PAIR_ALPN: &[u8] = b"holt/pair/1";
@@ -346,7 +347,7 @@ async fn sync_session(inner: Arc<Inner>, conn: Connection, dialer: bool) -> NetR
     inner.set_online(peer, 1);
     let result = tokio::select! {
         r = send_changes(&inner, &mut send, &theirs, &peer_id) => r,
-        r = receive_changes(&inner, &mut recv, &theirs) => r,
+        r = receive_changes(&inner, &mut recv, &theirs, &conn, &peer_id) => r,
     };
     inner.set_online(peer, -1);
     result
@@ -392,6 +393,8 @@ async fn receive_changes(
     inner: &Inner,
     recv: &mut RecvStream,
     theirs: &Mutex<HashMap<String, i64>>,
+    conn: &Connection,
+    peer_id: &str,
 ) -> NetResult<()> {
     loop {
         if let SyncMsg::Rows(rows) = read_msg(recv).await? {
@@ -403,8 +406,43 @@ async fn receive_changes(
                     *seen = (*seen).max(row.seq);
                 }
             }
-            inner.store.apply(rows)?;
+            inner.store.apply(rows, Some(&delivery(conn, peer_id)))?;
         }
+    }
+}
+
+/// The path the connection is using right now, so each clip can say how it got here.
+fn delivery(conn: &Connection, peer_id: &str) -> Delivery {
+    let paths = conn.paths();
+    let selected = paths
+        .iter()
+        .find(|p| p.is_selected())
+        .map(|p| p.remote_addr().clone());
+    let (path, relay) = match selected {
+        Some(TransportAddr::Relay(url)) => {
+            (Some(ArrivalPath::Relay), url.host_str().map(String::from))
+        }
+        Some(TransportAddr::Ip(addr)) if is_local(addr.ip()) => {
+            (Some(ArrivalPath::LocalNetwork), None)
+        }
+        Some(TransportAddr::Ip(_)) => (Some(ArrivalPath::Direct), None),
+        _ => (None, None),
+    };
+    Delivery {
+        peer: peer_id.into(),
+        path,
+        relay,
+    }
+}
+
+/// Private, link-local and loopback addresses: the other device is on this network.
+fn is_local(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local() || v4.is_loopback(),
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => is_local(IpAddr::V4(v4)),
+            None => v6.is_unique_local() || v6.is_unicast_link_local() || v6.is_loopback(),
+        },
     }
 }
 
@@ -699,6 +737,12 @@ mod tests {
             (incoming.text.as_str(), incoming.device.as_str()),
             ("from a", "Mac A")
         );
+        // Both nodes are on this machine, so the clip came over the local network.
+        let id = b.inner.store.search("from a".into(), 1).unwrap()[0].id;
+        let arrivals = b.inner.store.arrivals(id).unwrap();
+        assert_eq!(arrivals.len(), 1);
+        assert_eq!(arrivals[0].from, "Mac A");
+        assert_eq!(arrivals[0].path, Some(ArrivalPath::LocalNetwork));
 
         b.inner.store.add("from b".into(), None).unwrap();
         wait_until("a to get b's clip", || texts(&a) == ["from b", "from a"]);
