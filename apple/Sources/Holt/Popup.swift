@@ -125,6 +125,8 @@ final class PopupController {
     private let panel: PopupPanel
     private let model: PopupModel
     private let onPick: (Clip) -> Void
+    /// ⌘, opens Settings. The popup never activates Holt, so the app menu's own ⌘, never fires here.
+    var onSettings: (() -> Void)?
     private let lightbox = Lightbox()
     private var keyMonitor: Any?
 
@@ -234,6 +236,9 @@ final class PopupController {
                 model.togglePin()
             } else if key == "i" {
                 model.showInfo.toggle()
+            } else if key == "," {
+                close()
+                onSettings?()
             } else if key == "o", let clip = model.selected, let url = openURL(clip) {
                 close()
                 NSWorkspace.shared.open(url)

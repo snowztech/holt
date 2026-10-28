@@ -95,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         popup = PopupController(store: store, syncStatus: { [weak self] in self?.syncStatus() }) { [weak self] clip in
             self?.paste(clip)
         }
+        popup.onSettings = { [weak self] in self?.settings.show() }
         hotKey = HotKey(Prefs.shortcut) { [weak self] in self?.popup.toggle() }
 
         settings = SettingsWindow(
