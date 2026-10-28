@@ -69,8 +69,49 @@ final class PopupModel: ObservableObject {
 
 /// Floating panel that takes the keyboard without activating Holt, so the app
 /// the user was typing in stays frontmost and gets the paste.
-private final class PopupPanel: NSPanel {
+final class PopupPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    private var pressedRow: DragSource.DragView?
+
+    /// SwiftUI's scroll view keeps every click for itself, so AppKit views in
+    /// the rows never see one. Mouse events are handed to the row under the
+    /// cursor here instead.
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            if let row = row(at: event.locationInWindow) {
+                pressedRow = row
+                row.mouseDown(with: event)
+                return
+            }
+        case .leftMouseDragged:
+            if let pressedRow {
+                pressedRow.mouseDragged(with: event)
+                return
+            }
+        case .leftMouseUp:
+            if let pressedRow {
+                self.pressedRow = nil
+                pressedRow.mouseUp(with: event)
+                return
+            }
+        default:
+            break
+        }
+        super.sendEvent(event)
+    }
+
+    private func row(at point: NSPoint) -> DragSource.DragView? {
+        guard let contentView else { return nil }
+        return rows(in: contentView).first { row in
+            row.bounds.intersection(row.visibleRect).contains(row.convert(point, from: nil))
+        }
+    }
+
+    private func rows(in view: NSView) -> [DragSource.DragView] {
+        view.subviews.flatMap { ($0 as? DragSource.DragView).map { [$0] } ?? rows(in: $0) }
+    }
 }
 
 @MainActor
@@ -340,9 +381,11 @@ struct PopupView: View {
                             selected: index == model.selection
                         )
                         .id(clip.id)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) { onPick(clip) }
-                        .onTapGesture { model.selection = index }
+                        .overlay(
+                            DragSource(
+                                clip: clip,
+                                onClick: { model.selection = index },
+                                onDoubleClick: { onPick(clip) }))
                     }
                 }
                 .padding(8)
@@ -364,7 +407,7 @@ private struct ClipRow: View {
         HStack(spacing: 10) {
             SourceIcon(clip: clip).frame(width: 18, height: 18)
             if let image = clip.image {
-                Thumbnail(data: image.thumb, maxWidth: 64, maxHeight: 24)
+                Thumbnail(data: image.thumb, maxWidth: 40, maxHeight: 24)
             }
             Text(highlight(rowLabel(clip), query))
                 .font(.system(size: 13.5))
@@ -425,14 +468,15 @@ private struct ClipPreview: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                 if !clip.text.isEmpty {
-                    ScrollView {
-                        Text(clip.text)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(2)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    // The first lines only, and not selectable: laying out a screenshot's
+                    // worth of recognized text costs hundreds of milliseconds per keypress.
+                    // The whole text is still what search matches.
+                    Text(recognizedExcerpt)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 0)
                 } else {
                     Spacer(minLength: 0)
                 }
@@ -460,6 +504,12 @@ private struct ClipPreview: View {
     }
 
     private var lineCount: Int { clip.text.split(whereSeparator: \.isNewline).count }
+
+    private var recognizedExcerpt: String {
+        let lines = clip.text.split(whereSeparator: \.isNewline)
+        let excerpt = lines.prefix(12).map { String($0.prefix(120)) }.joined(separator: "\n")
+        return lines.count > 12 ? excerpt + "\n…" : excerpt
+    }
     private var isShort: Bool { lineCount <= 1 && clip.text.count <= 90 }
 
     private var meta: String {
@@ -577,10 +627,11 @@ private struct Thumbnail: View {
 
     var body: some View {
         if let image = NSImage(data: data) {
+            // A fixed box, filled: a tall screenshot would otherwise be a sliver.
             Image(nsImage: image)
                 .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: maxWidth, maxHeight: maxHeight)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: maxWidth, height: maxHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         }
     }
@@ -657,6 +708,95 @@ func openURL(_ clip: Clip) -> URL? {
     case .link: linkURL(clip)
     case .image: clip.image.map { URL(fileURLWithPath: $0.path) }
     case .text: nil
+    }
+}
+
+/// Lets a row be dragged into another app, and still clicked. SwiftUI's own
+/// drag writes types only SwiftUI reads; AppKit's writes what the Finder, Mail
+/// and browsers expect.
+struct DragSource: NSViewRepresentable {
+    let clip: Clip
+    let onClick: () -> Void
+    let onDoubleClick: () -> Void
+
+    func makeNSView(context: Context) -> DragView { DragView() }
+
+    func updateNSView(_ view: DragView, context: Context) {
+        view.clip = clip
+        view.onClick = onClick
+        view.onDoubleClick = onDoubleClick
+    }
+
+    final class DragView: NSView, NSDraggingSource {
+        var clip: Clip?
+        var onClick: (() -> Void)?
+        var onDoubleClick: (() -> Void)?
+        private var mouseDown: NSEvent?
+        private var dragging = false
+
+        // Otherwise a drag on a row moves the popup, which is movable by its background.
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        override func mouseDown(with event: NSEvent) {
+            mouseDown = event
+            dragging = false
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let mouseDown, !dragging, let clip,
+                hypot(event.locationInWindow.x - mouseDown.locationInWindow.x, event.locationInWindow.y - mouseDown.locationInWindow.y) > 4,
+                let writer = dragWriter(for: clip)
+            else { return }
+            dragging = true
+            let item = NSDraggingItem(pasteboardWriter: writer)
+            let image = dragImage(for: clip)
+            let origin = convert(mouseDown.locationInWindow, from: nil)
+            item.setDraggingFrame(
+                NSRect(
+                    x: origin.x - image.size.width / 2, y: origin.y - image.size.height / 2, width: image.size.width,
+                    height: image.size.height),
+                contents: image)
+            beginDraggingSession(with: [item], event: mouseDown, source: self)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            defer { mouseDown = nil }
+            guard !dragging else { return }
+            event.clickCount == 2 ? onDoubleClick?() : onClick?()
+        }
+
+        func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+            .copy
+        }
+
+    }
+}
+
+/// What a dragged clip carries: the text as text; an image as its file, plus PNG and TIFF for apps
+/// that take a picture rather than a file.
+func dragWriter(for clip: Clip) -> NSPasteboardWriting? {
+    guard let image = clip.image else { return clip.text as NSString }
+    let url = URL(fileURLWithPath: image.path)
+    guard let bytes = try? Data(contentsOf: url) else { return nil }
+    let item = Images.pasteboardItem(bytes: bytes, format: image.format, sourceApp: clip.sourceApp)
+    item.setString(url.absoluteString, forType: .fileURL)
+    return item
+}
+
+func dragImage(for clip: Clip) -> NSImage {
+    if let image = clip.image, let thumb = NSImage(data: image.thumb) {
+        let scale = min(1, 160 / max(thumb.size.width, 1), 100 / max(thumb.size.height, 1))
+        thumb.size = NSSize(width: thumb.size.width * scale, height: thumb.size.height * scale)
+        return thumb
+    }
+    let text = oneLine(clip.text).prefix(60) as NSString
+    let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor]
+    let size = text.size(withAttributes: attributes)
+    return NSImage(size: NSSize(width: size.width + 16, height: size.height + 8), flipped: false) { rect in
+        NSColor.windowBackgroundColor.withAlphaComponent(0.9).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+        text.draw(at: NSPoint(x: 8, y: 4), withAttributes: attributes)
+        return true
     }
 }
 

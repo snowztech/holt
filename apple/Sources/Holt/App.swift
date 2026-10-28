@@ -156,6 +156,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     clip.image.flatMap { menuThumbnail($0) } ?? AppInfo.icon(clip.sourceApp).map(resized) ?? symbol("doc.on.clipboard")
                 // Images get the preview instead of a tooltip.
                 item.toolTip = clip.image == nil && clip.text.count > 44 ? String(clip.text.prefix(400)) : nil
+                // Drawn by a view so the row can be dragged out. Title and image stay for VoiceOver.
+                item.view = MenuRow(clip: clip, title: item.title, icon: item.image)
                 menu.addItem(item)
             }
             menu.addItem(.separator())

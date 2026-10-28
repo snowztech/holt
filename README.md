@@ -27,7 +27,7 @@
 ## What it does
 
 - **Find anything you copied.** Press ⇧⌘V and start typing. Every word has to match, so `ssh 10.0` finds that one command from last week.
-- **Paste where you were.** Pick a clip and press return. Holt pastes it into the app you were typing in.
+- **Paste where you were.** Pick a clip and press return. Holt pastes it into the app you were typing in. Or drag a clip out of the list into any field.
 - **Images too.** Screenshots and copied pictures, up to 10 MB each. The text in them is read on your Mac, so `invoice 2026` finds the screenshot of the invoice.
 - **Pin what you reuse.** Pinned clips stay at the top and never expire.
 - **On every Mac.** Pair your Macs once. Copy on one, press ⌘V on the other a second later.
