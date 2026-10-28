@@ -67,8 +67,11 @@ final class ClipboardWatcher {
         let items = pasteboard.pasteboardItems ?? []
         guard !items.contains(where: { item in item.types.contains { Self.ignoredTypes.contains($0.rawValue) } }) else { return }
         let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        // Text wins when an item carries both, so Finder and Word copies stay text.
-        if let text = items.lazy.compactMap({ $0.string(forType: .string) }).first {
+        // An image file copied in Finder is kept as the image, not its name.
+        // Otherwise text wins when an item carries both, so Word copies stay text.
+        if Prefs.recordImages, let file = items.lazy.compactMap(Images.file).first {
+            onImage(file, app)
+        } else if let text = items.lazy.compactMap({ $0.string(forType: .string) }).first {
             onText(text, app)
         } else if Prefs.recordImages, let image = items.lazy.compactMap(Images.raw).first {
             onImage(image, app)

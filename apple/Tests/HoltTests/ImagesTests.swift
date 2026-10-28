@@ -75,12 +75,32 @@ final class ImagesTests: XCTestCase {
         let png = try XCTUnwrap(encode(picture(width: 8, height: 8), as: .png))
         try png.write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
+        // What Finder puts on the clipboard: the URL, the name as text, the icon as TIFF.
         let item = NSPasteboardItem()
         item.setString(url.absoluteString, forType: .fileURL)
+        item.setString(url.lastPathComponent, forType: .string)
+        item.setData(try XCTUnwrap(NSBitmapImageRep(cgImage: picture(width: 4, height: 4)).tiffRepresentation), forType: .tiff)
 
-        let raw = try XCTUnwrap(Images.raw(in: item))
+        let raw = try XCTUnwrap(Images.file(in: item))
         XCTAssertEqual(raw.type, .fileURL)
         XCTAssertEqual(raw.data, png)
+    }
+
+    func testSkipsFilesThatAreNotImagesOrTooBig() throws {
+        let dir = FileManager.default.temporaryDirectory
+        let text = dir.appendingPathComponent("holt-test-\(UUID()).txt")
+        let huge = dir.appendingPathComponent("holt-test-\(UUID()).png")
+        try Data("notes".utf8).write(to: text)
+        try Data(count: Images.maxBytes + 1).write(to: huge)
+        defer {
+            try? FileManager.default.removeItem(at: text)
+            try? FileManager.default.removeItem(at: huge)
+        }
+        for url in [text, huge] {
+            let item = NSPasteboardItem()
+            item.setString(url.absoluteString, forType: .fileURL)
+            XCTAssertNil(Images.file(in: item), url.lastPathComponent)
+        }
     }
 
     func testPastesPNGAndTIFFForEveryApp() throws {

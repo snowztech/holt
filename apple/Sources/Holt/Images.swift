@@ -49,9 +49,16 @@ enum Images {
                 return RawImage(data: data, type: type)
             }
         }
+        return nil
+    }
+
+    /// An image file copied in Finder. The item also carries the file's name as
+    /// text and its icon as TIFF, so this is asked first.
+    static func file(in item: NSPasteboardItem) -> RawImage? {
         guard let string = item.string(forType: .fileURL), let url = URL(string: string),
             fileExtensions.contains(url.pathExtension.lowercased()),
-            let data = try? Data(contentsOf: url), !data.isEmpty
+            let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0, size <= maxBytes,
+            let data = try? Data(contentsOf: url)
         else { return nil }
         return RawImage(data: data, type: .fileURL)
     }
