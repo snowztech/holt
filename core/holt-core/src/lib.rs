@@ -77,25 +77,29 @@ pub struct IncomingCopy {
     pub image_format: Option<String>,
 }
 
-/// The network path a synced clip took to reach this device: straight from
-/// the other device, or forwarded by a relay server because they couldn't
-/// reach each other.
+/// The network path a synced clip took to reach this device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ArrivalPath {
-    Direct,
+    /// Straight from the other device, without leaving this network.
+    SameNetwork,
+    /// Straight from the other device, across the internet.
+    Internet,
+    /// Forwarded by a relay server, because the devices couldn't reach each other.
     Relay,
 }
 
 impl ArrivalPath {
     fn as_str(self) -> &'static str {
         match self {
-            ArrivalPath::Direct => "direct",
+            ArrivalPath::SameNetwork => "same-network",
+            ArrivalPath::Internet => "internet",
             ArrivalPath::Relay => "relay",
         }
     }
 
     fn parse(stored: &str) -> Option<Self> {
-        [Self::Direct, Self::Relay]
+        // 0.1.6 stored "direct" without telling the two apart, so those have no path.
+        [Self::SameNetwork, Self::Internet, Self::Relay]
             .into_iter()
             .find(|p| p.as_str() == stored)
     }
@@ -1271,10 +1275,14 @@ mod tests {
         assert_eq!(b.arrivals(on_b.id).unwrap().len(), 1);
         tick();
         a.add("hello".into(), None).unwrap();
-        sync_via(&a, &b, ArrivalPath::Direct);
+        sync_via(&a, &b, ArrivalPath::Internet);
         let arrivals = b.arrivals(on_b.id).unwrap();
         assert_eq!(arrivals.len(), 2);
-        assert_eq!(arrivals[1].path, Some(ArrivalPath::Direct));
+        assert_eq!(arrivals[1].path, Some(ArrivalPath::Internet));
+
+        // 0.1.6 stored plain "direct", which can't say which network.
+        assert_eq!(ArrivalPath::parse("direct"), None);
+        assert_eq!(ArrivalPath::parse("internet"), Some(ArrivalPath::Internet));
     }
 
     #[test]
@@ -1304,7 +1312,7 @@ mod tests {
     fn pruning_forgets_arrivals_of_deleted_clips() {
         let (a, b) = (store(), store());
         a.add("gone soon".into(), None).unwrap();
-        sync_via(&a, &b, ArrivalPath::Direct);
+        sync_via(&a, &b, ArrivalPath::SameNetwork);
         let id = b.search("".into(), 10).unwrap()[0].id;
         b.delete(id).unwrap();
         b.prune(30, 5000).unwrap();
