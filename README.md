@@ -39,7 +39,7 @@
 | --- | --- | --- | --- | --- |
 | History and search | Yes | No | Yes | Yes |
 | Sync between Macs | Yes, over any network | Last copy only, devices nearby | No | Yes, through iCloud |
-| iPhone | Coming | Yes | No | Yes |
+| iPhone | Beta | Yes | No | Yes |
 | Open source | Yes | No | Yes | No |
 | Price | Free | Free | Free | Subscription |
 
@@ -52,6 +52,8 @@ brew install --cask snowztech/tap/holt
 ```
 
 It needs macOS 14 or later on Apple Silicon. Releases are signed and notarized, so macOS opens Holt without warnings, and Holt updates itself from the menu bar menu.
+
+Holt for iPhone is in beta: [join it on TestFlight](https://testflight.apple.com/join/vREWnfrC).
 
 To build from source instead, you need Xcode and Rust ([rustup.rs](https://rustup.rs)):
 
@@ -103,7 +105,7 @@ Skip does the same with what you copy: keeps it safe, and skips it across to you
 - [x] Clipboard history on the Mac
 - [x] Sync between Macs
 - [x] Signed download and Homebrew
-- [ ] iPhone app
+- [ ] iPhone app, in beta on [TestFlight](https://testflight.apple.com/join/vREWnfrC)
 - [x] Images, and search for the text inside screenshots
 - [ ] Windows and Linux
 
