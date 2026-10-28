@@ -448,8 +448,9 @@ impl Store {
     /// Removes any file in `images/` that no live image clip points to: leftovers
     /// of a crash between writing the file and the row, or of a prune.
     fn sweep_images(&self) -> Result<()> {
+        // Held to the end: an image written meanwhile would look like a leftover.
+        let conn = self.conn.lock().unwrap();
         let live: std::collections::HashSet<String> = {
-            let conn = self.conn.lock().unwrap();
             let mut stmt = conn.prepare("SELECT key FROM clips WHERE kind = ?1 AND deleted = 0")?;
             let keys = stmt.query_map(params![ClipKind::Image as i64], |r| r.get(0))?;
             keys.collect::<std::result::Result<_, _>>()?
