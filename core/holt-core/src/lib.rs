@@ -539,14 +539,26 @@ impl Store {
         })?;
         let mut rows: Vec<Row> = rows.collect::<std::result::Result<_, _>>()?;
         // Live images travel with their bytes. A missing file leaves `image` empty
-        // and the peer drops the row, as it would a forged one.
-        for row in rows
-            .iter_mut()
-            .filter(|r| r.kind == ClipKind::Image as i64 && !r.deleted)
-        {
+        // and the peer drops the row, as it would a forged one. Past one image's
+        // worth of bytes the rows stop, so a long history of screenshots isn't all
+        // in memory at once; the caller asks again from the last seq.
+        let mut loaded = 0;
+        let mut keep = rows.len();
+        for (i, row) in rows.iter_mut().enumerate() {
+            if row.kind != ClipKind::Image as i64 || row.deleted {
+                continue;
+            }
+            if loaded >= MAX_IMAGE_BYTES {
+                keep = i;
+                break;
+            }
             let path = self.image_path(&row.key, row.format.as_deref().unwrap_or_default());
-            row.image = std::fs::read(path).ok().map(|bytes| BASE64.encode(bytes));
+            row.image = std::fs::read(path).ok().map(|bytes| {
+                loaded += bytes.len();
+                BASE64.encode(bytes)
+            });
         }
+        rows.truncate(keep);
         Ok(rows)
     }
 
@@ -1237,6 +1249,29 @@ mod tests {
         ));
         b.apply(rows).unwrap();
         assert!(all(&b).is_empty());
+    }
+
+    #[test]
+    fn rows_since_stops_after_an_image_worth_of_bytes() {
+        let s = store();
+        for n in 1..=3u8 {
+            s.add_image(
+                vec![n; 6 << 20],
+                "png".into(),
+                1,
+                1,
+                vec![],
+                "".into(),
+                None,
+            )
+            .unwrap();
+        }
+        let id = s.device_id();
+        let first = s.rows_since(&id, 0, 10).unwrap();
+        assert_eq!(first.len(), 2);
+        let rest = s.rows_since(&id, first[1].seq, 10).unwrap();
+        assert_eq!(rest.len(), 1);
+        assert!(rest[0].image.is_some());
     }
 
     #[test]
