@@ -577,6 +577,12 @@ impl Store {
                 // A live clip's key must match its text, or its bytes for an
                 // image, or dedupe breaks.
                 let is_image = row.kind == ClipKind::Image as i64;
+                // An image's key names its file, so a deleted one must still be a hash.
+                if is_image
+                    && (row.key.len() != 64 || !row.key.bytes().all(|b| b.is_ascii_hexdigit()))
+                {
+                    continue;
+                }
                 let image = if is_image && !row.deleted {
                     let Some(bytes) = row.image.as_deref().and_then(|b| BASE64.decode(b).ok())
                     else {
@@ -1231,6 +1237,22 @@ mod tests {
         ));
         b.apply(rows).unwrap();
         assert!(all(&b).is_empty());
+    }
+
+    #[test]
+    fn deleted_images_from_a_peer_stay_inside_images() {
+        let (a, b) = (store(), store());
+        let clip = add_png(&a, "");
+        a.delete(clip.id).unwrap();
+        let outside = b
+            .images_dir
+            .with_file_name(format!("holt-outside-{}.png", now_ms()));
+        std::fs::write(&outside, b"x").unwrap();
+        let mut rows = a.rows_since(&a.device_id(), 0, 10).unwrap();
+        rows[0].key = format!("../{}", outside.file_stem().unwrap().to_str().unwrap());
+        b.apply(rows).unwrap();
+        assert!(outside.exists());
+        std::fs::remove_file(outside).unwrap();
     }
 
     #[test]
