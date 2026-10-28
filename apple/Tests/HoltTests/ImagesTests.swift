@@ -165,6 +165,25 @@ final class ImagesTests: XCTestCase {
     }
 }
 
+final class SourceTests: XCTestCase {
+    @MainActor
+    func testSaysWhereACopyCameFrom() {
+        let plain = NSPasteboardItem()
+        plain.setString("hi", forType: .string)
+        XCTAssertEqual(ClipboardWatcher.source(of: [plain], frontmost: "com.apple.TextEdit"), "com.apple.TextEdit")
+        XCTAssertNil(ClipboardWatcher.source(of: [plain], frontmost: Bundle.main.bundleIdentifier))
+
+        let named = NSPasteboardItem()
+        named.setString("com.apple.Safari", forType: Images.source)
+        XCTAssertEqual(ClipboardWatcher.source(of: [named], frontmost: "com.apple.TextEdit"), "com.apple.Safari")
+
+        let remote = NSPasteboardItem()
+        remote.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardWatcher.universalClipboard))
+        XCTAssertEqual(ClipboardWatcher.source(of: [remote], frontmost: "com.apple.TextEdit"), ClipboardWatcher.universalClipboard)
+        XCTAssertEqual(AppInfo.name(ClipboardWatcher.universalClipboard), "Universal Clipboard")
+    }
+}
+
 final class DragTests: XCTestCase {
     func testImageDragOffersFileAndPictureTypes() throws {
         let png = try XCTUnwrap(encodePNG())

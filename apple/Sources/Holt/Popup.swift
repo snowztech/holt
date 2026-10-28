@@ -676,6 +676,7 @@ enum AppInfo {
 
     static func name(_ bundleID: String?) -> String? {
         guard let bundleID else { return nil }
+        if bundleID == ClipboardWatcher.universalClipboard { return "Universal Clipboard" }
         if let cached = names[bundleID] { return cached }
         let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
         let name = url.map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
