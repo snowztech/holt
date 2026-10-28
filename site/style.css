@@ -328,6 +328,43 @@ code { font-family: var(--sn-font-mono); font-size: 0.92em; color: var(--sn-fg);
 .legal .legal-date { font-size: 14px; color: var(--sn-fg-subtle); }
 .legal a { color: var(--sn-accent, inherit); text-decoration: underline; text-underline-offset: 3px; }
 
+.docs { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 64px; padding-block: 40px 80px; }
+.docs-toc { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.docs-toc-title { font-size: 12px; font-weight: 600; color: var(--sn-fg-subtle); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+.docs-toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--sn-border); }
+.docs-toc a { display: block; padding: 5px 0 5px 14px; margin-left: -1px; border-left: 1px solid transparent; color: var(--sn-fg-muted); }
+.docs-toc a:hover { color: var(--sn-fg); border-left-color: var(--sn-accent); }
+.docs-body { max-width: 680px; min-width: 0; }
+.docs h1 { font-size: clamp(36px, 5vw, 48px); margin-bottom: 16px; }
+.docs-lede { font-size: 19px; color: var(--sn-fg-muted); }
+.docs section { padding-top: 48px; scroll-margin-top: 16px; }
+.docs section + section { margin-top: 8px; border-top: 1px solid var(--sn-border); }
+.docs h2 { font-size: 28px; margin-bottom: 14px; }
+.docs h3 { font-size: 17px; margin: 26px 0 8px; }
+.docs-body p, .docs-body li { color: var(--sn-fg-muted); font-size: 16px; line-height: 1.65; }
+.docs-body p { margin-bottom: 12px; }
+.docs-body ul, .docs-body ol.steps { margin: 0 0 14px; padding-left: 20px; }
+.docs-body li { margin-bottom: 8px; padding-left: 2px; }
+.docs-body li::marker { color: var(--sn-fg-faint); }
+.docs-body strong { color: var(--sn-fg); font-weight: 600; }
+.docs-body a:not(.sn-btn) { color: var(--sn-accent); text-decoration: underline; text-underline-offset: 3px; }
+.docs .sn-kbd { font-size: 12.5px; color: var(--sn-fg); }
+.docs .install { margin: 4px 0 10px; }
+.docs-fine { font-size: 14px; color: var(--sn-fg-subtle) !important; }
+.docs-keys { width: 100%; border-collapse: collapse; font-size: 15px; }
+.docs-keys td { padding: 11px 0; border-bottom: 1px solid var(--sn-border); color: var(--sn-fg-muted); vertical-align: top; }
+.docs-keys tr:last-child td { border-bottom: 0; }
+.docs-keys td:first-child { width: 150px; padding-right: 16px; white-space: nowrap; }
+.docs .faq { margin-bottom: 16px; }
+.docs .faq details p { margin: 0; }
+
+@media (max-width: 900px) {
+  .docs { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-top: 16px; }
+  .docs-toc { position: static; }
+  .docs-toc ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; gap: 0 16px; }
+  .docs-toc a { padding-left: 0; border-left: 0; }
+}
+
 @media (max-width: 900px) {
   .hero, .split, .privacy { grid-template-columns: minmax(0, 1fr); }
   .hero { gap: 40px; padding-top: 24px; }
