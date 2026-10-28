@@ -65,11 +65,20 @@ private struct ToastView: View {
                 .opacity(landed ? 1 : 0)
             VStack(alignment: .leading, spacing: 1) {
                 Text("From \(copy.device)").font(.system(size: 12.5, weight: .semibold))
-                Text(oneLine(copy.text))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if let image = copy.image, let thumb = Images.thumbnailImage(from: image) {
+                    Image(nsImage: thumb)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 120, maxHeight: 36, alignment: .leading)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .padding(.top, 3)
+                } else {
+                    Text(copy.image == nil ? oneLine(copy.text) : "Image")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
             .frame(maxWidth: 220, alignment: .leading)
         }

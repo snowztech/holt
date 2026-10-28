@@ -407,7 +407,11 @@ fn batches(rows: Vec<Row>) -> Vec<Vec<Row>> {
     let mut out: Vec<Vec<Row>> = vec![];
     let mut size = 0;
     for row in rows {
-        let len = row.text.as_ref().map_or(0, |t| t.len()) + 200;
+        // An image row carries its bytes, so it fills a message on its own.
+        let len = row.text.as_ref().map_or(0, |t| t.len())
+            + row.image.as_ref().map_or(0, |i| i.len())
+            + row.thumb.as_ref().map_or(0, |t| t.len())
+            + 200;
         if out.is_empty() || size + len > BATCH_BYTES {
             out.push(vec![]);
             size = 0;

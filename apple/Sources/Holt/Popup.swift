@@ -155,7 +155,7 @@ final class PopupController {
             guard command, let key = event.charactersIgnoringModifiers else { return event }
             if key == "p" {
                 model.togglePin()
-            } else if key == "o", let clip = model.selected, clip.kind == .link, let url = linkURL(clip) {
+            } else if key == "o", let clip = model.selected, let url = openURL(clip) {
                 close()
                 NSWorkspace.shared.open(url)
             } else if let n = Int(key), (1...9).contains(n), model.clips.indices.contains(n - 1) {
@@ -254,11 +254,21 @@ private struct ClipRow: View {
     var body: some View {
         HStack(spacing: 10) {
             SourceIcon(clip: clip).frame(width: 18, height: 18)
-            Text(highlight(oneLine(clip.text), query))
+            if let image = clip.image {
+                Thumbnail(data: image.thumb, maxWidth: 64, maxHeight: 24)
+            }
+            Text(highlight(rowLabel(clip), query))
                 .font(.system(size: 13.5))
+                .foregroundStyle(clip.image != nil && clip.text.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 12)
+            if let image = clip.image, !clip.text.isEmpty {
+                Text(dimensions(image))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
             if clip.pinned {
                 Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Brand.river)
             }
@@ -300,7 +310,24 @@ private struct ClipPreview: View {
                 Text(meta).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             }
 
-            if clip.kind == .link {
+            if let image = clip.image {
+                ImagePreview(image: image)
+                Text("\(dimensions(image)) · \(image.format.uppercased()) · \(fileSize(image.bytes))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                if !clip.text.isEmpty {
+                    ScrollView {
+                        Text(clip.text)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    Spacer(minLength: 0)
+                }
+            } else if clip.kind == .link {
                 linkCard
                 Spacer(minLength: 0)
             } else if isShort {
@@ -369,7 +396,7 @@ private struct ActionBar: View {
             }
             Spacer()
             if let clip {
-                if clip.kind == .link { action("Open", "⌘O") }
+                if openURL(clip) != nil { action("Open", "⌘O") }
                 action(clip.pinned ? "Unpin" : "Pin", "⌘P")
                 action("Delete", "⌘⌫")
                 action(targetApp.map { "Paste in \($0)" } ?? "Paste", "↩", primary: true)
@@ -417,8 +444,70 @@ struct SourceIcon: View {
         if let icon = AppInfo.icon(clip.sourceApp) {
             Image(nsImage: icon).resizable()
         } else {
-            Image(systemName: clip.kind == .link ? "link" : "text.alignleft")
+            Image(systemName: fallback)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var fallback: String {
+        switch clip.kind {
+        case .link: "link"
+        case .image: "photo"
+        case .text: "text.alignleft"
+        }
+    }
+}
+
+/// A clip's stored thumbnail, a few kilobytes, so the list never opens the file.
+private struct Thumbnail: View {
+    let data: Data
+    let maxWidth: CGFloat
+    let maxHeight: CGFloat
+
+    var body: some View {
+        if let image = NSImage(data: data) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: maxWidth, maxHeight: maxHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        }
+    }
+}
+
+/// The image decoded for the preview pane, off the main thread and cached, with
+/// the thumbnail standing in while it loads.
+private struct ImagePreview: View {
+    let image: ImageInfo
+    @State private var loaded: NSImage?
+
+    private static let cache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 12
+        return cache
+    }()
+
+    var body: some View {
+        Group {
+            if let picture = loaded ?? NSImage(data: image.thumb) {
+                Image(nsImage: picture)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: 240, alignment: .topLeading)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .task(id: image.path) {
+            let key = image.path as NSString
+            if let cached = Self.cache.object(forKey: key) {
+                loaded = cached
+                return
+            }
+            let path = image.path
+            let picture = await Task.detached(priority: .userInitiated) { Images.preview(path: path, maxPixels: 1200) }.value
+            guard !Task.isCancelled, let picture else { return }
+            Self.cache.setObject(picture, forKey: key)
+            loaded = picture
         }
     }
 }
@@ -449,6 +538,21 @@ enum AppInfo {
 
 func linkURL(_ clip: Clip) -> URL? {
     URL(string: clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+/// What ⌘O opens: the link, or the image file in Preview.
+func openURL(_ clip: Clip) -> URL? {
+    switch clip.kind {
+    case .link: linkURL(clip)
+    case .image: clip.image.map { URL(fileURLWithPath: $0.path) }
+    case .text: nil
+    }
+}
+
+/// One line for the list: the text, or the text read in an image, or its size.
+private func rowLabel(_ clip: Clip) -> String {
+    if let image = clip.image, clip.text.isEmpty { return imageLabel(image) }
+    return oneLine(clip.text)
 }
 
 private func date(_ clip: Clip) -> Date {

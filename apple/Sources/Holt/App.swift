@@ -62,14 +62,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         watcher = ClipboardWatcher(
-            onCopy: { [weak self] text, app in
+            onText: { [weak self] text, app in
                 if let app, Prefs.ignoredApps.contains(app) { return }
                 _ = try? self?.store.add(text: text, sourceApp: app)
+            },
+            onImage: { [weak self] raw, app in
+                if let app, Prefs.ignoredApps.contains(app) { return }
+                // Decoding and reading the text take a moment; the clip shows up
+                // once both are done.
+                Task.detached(priority: .utility) {
+                    guard let image = Images.prepare(raw) else { return }
+                    let text = Images.recognizeText(in: image.bytes)
+                    await MainActor.run { self?.record(image, text: text, sourceApp: app) }
+                }
             },
             incoming: { [weak self] in
                 guard let self, let copy = store.takeIncomingCopy() else { return nil }
                 received(copy)
-                return copy.text
+                if let image = copy.image {
+                    return .image(image, format: copy.imageFormat ?? "png", sourceApp: nil)
+                }
+                return .text(copy.text)
             }
         )
         watcher.start()
@@ -130,12 +143,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !recent.isEmpty {
             menu.addItem(.sectionHeader(title: "Recent"))
             for clip in recent {
-                let title = oneLine(clip.text)
+                let title = clip.image.map(imageLabel) ?? oneLine(clip.text)
                 let item = NSMenuItem(
                     title: title.count > 44 ? String(title.prefix(43)) + "…" : title, action: #selector(copyRecent(_:)), keyEquivalent: "")
-                item.representedObject = clip.text
+                item.representedObject = clip
                 item.image = AppInfo.icon(clip.sourceApp).map(resized) ?? symbol("doc.on.clipboard")
-                item.toolTip = clip.text.count > 44 ? String(clip.text.prefix(400)) : nil
+                item.toolTip = clip.text.count > 44 || clip.image != nil ? String(clip.text.prefix(400)) : nil
                 menu.addItem(item)
             }
             menu.addItem(.separator())
@@ -182,9 +195,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func copyRecent(_ sender: NSMenuItem) {
-        guard let text = sender.representedObject as? String else { return }
-        watcher.put(text)
-        _ = try? store.add(text: text, sourceApp: nil)
+        guard let clip = sender.representedObject as? Clip else { return }
+        copy(clip)
     }
 
     // MARK: Sync
@@ -211,12 +223,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Paste
 
+    /// Puts a clip back on the clipboard and records the copy ourselves, so it
+    /// moves to the top with its original source app instead of the watcher
+    /// crediting whichever app is in front.
+    private func copy(_ clip: Clip) {
+        if let image = clip.image {
+            guard let bytes = try? Data(contentsOf: URL(fileURLWithPath: image.path)) else { return }
+            watcher.put(.image(bytes, format: image.format, sourceApp: clip.sourceApp))
+            _ = try? store.addImage(
+                bytes: bytes, format: image.format, width: image.width, height: image.height,
+                thumb: image.thumb, text: clip.text, sourceApp: clip.sourceApp)
+        } else {
+            watcher.put(.text(clip.text))
+            _ = try? store.add(text: clip.text, sourceApp: clip.sourceApp)
+        }
+    }
+
+    private func record(_ image: CopiedImage, text: String, sourceApp: String?) {
+        _ = try? store.addImage(
+            bytes: image.bytes, format: image.format, width: image.width, height: image.height,
+            thumb: image.thumb, text: text, sourceApp: sourceApp)
+        popup.refresh()
+    }
+
     private func paste(_ clip: Clip) {
         popup.close()
-        // Record it ourselves so it moves to the top with its original source app,
-        // instead of the watcher crediting whichever app is in front.
-        watcher.put(clip.text)
-        _ = try? store.add(text: clip.text, sourceApp: clip.sourceApp)
+        copy(clip)
 
         // Without Accessibility access the clip is still on the clipboard,
         // the user just presses ⌘V themselves.

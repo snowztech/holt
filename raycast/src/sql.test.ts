@@ -16,6 +16,9 @@ test("every word must match, and quotes and wildcards are literal", () => {
   add.run("it's 100% done_now", 2, 0, 0, "other", "Air");
   add.run("ssh pinned", 3, 1, 0, null, null);
   add.run("ssh gone", 4, 0, 1, null, null);
+  // An image clip: its text is what was read in it. The extension can't paste
+  // images yet, so it leaves them out.
+  db.prepare("INSERT INTO clips (kind, text, created_at, pinned, deleted) VALUES (2, 'ssh screenshot', 5, 0, 0)").run();
 
   const texts = (q: string) =>
     db

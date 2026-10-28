@@ -1,7 +1,11 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -15,6 +19,10 @@ uniffi::setup_scaffolding!();
 /// and it keeps the database small.
 const MAX_CLIP_BYTES: usize = 1 << 20;
 
+/// Images bigger than this are skipped. A sync message holds one image at most,
+/// base64-encoded, and must stay under the 16 MB frame cap in `net`.
+pub const MAX_IMAGE_BYTES: usize = 10 << 20;
+
 /// A clip that arrives from another device goes on this Mac's clipboard only if
 /// it was copied this recently, the same window Apple uses for Universal Clipboard.
 const LIVE_COPY_WINDOW_MS: i64 = 120_000;
@@ -23,12 +31,14 @@ const LIVE_COPY_WINDOW_MS: i64 = 120_000;
 pub enum ClipKind {
     Text,
     Link,
+    Image,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct Clip {
     pub id: i64,
     pub kind: ClipKind,
+    /// The text, or for an image the text recognized in it (may be empty).
     pub text: String,
     pub source_app: Option<String>,
     /// Unix time in milliseconds of the last copy.
@@ -36,6 +46,25 @@ pub struct Clip {
     pub pinned: bool,
     /// Name of the device it was copied on, if that's not this one.
     pub device: Option<String>,
+    /// Set for image clips.
+    pub image: Option<ImageInfo>,
+}
+
+/// Where an image clip's bytes are and what they hold. The bytes stay on disk;
+/// only the thumbnail travels with the clip, so listing history never decodes
+/// a full-size image.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ImageInfo {
+    /// Absolute path of the stored file.
+    pub path: String,
+    /// "png", "jpeg" or "heic": the bytes as the app copied them, except TIFF
+    /// which the app converts to PNG before storing.
+    pub format: String,
+    pub width: u32,
+    pub height: u32,
+    pub bytes: u64,
+    /// A small encoded preview, a few kilobytes.
+    pub thumb: Vec<u8>,
 }
 
 /// A clip that just arrived from another device.
@@ -43,6 +72,9 @@ pub struct Clip {
 pub struct IncomingCopy {
     pub text: String,
     pub device: String,
+    /// The image bytes and their format, for an image clip.
+    pub image: Option<Vec<u8>>,
+    pub image_format: Option<String>,
 }
 
 #[derive(Debug, uniffi::Error)]
@@ -97,6 +129,19 @@ pub(crate) struct Row {
     pub copied_by: Option<String>,
     #[serde(default)]
     pub copied_on: Option<String>,
+    /// Image clips carry their bytes and thumbnail base64-encoded. Older
+    /// versions ignore these fields and drop the row, since its key doesn't
+    /// match its text.
+    #[serde(default)]
+    pub image: Option<String>,
+    #[serde(default)]
+    pub format: Option<String>,
+    #[serde(default)]
+    pub width: Option<i64>,
+    #[serde(default)]
+    pub height: Option<i64>,
+    #[serde(default)]
+    pub thumb: Option<String>,
 }
 
 #[derive(uniffi::Object)]
@@ -107,27 +152,105 @@ pub struct Store {
     device_name: Mutex<Option<String>>,
     changes: watch::Sender<u64>,
     incoming_copy: Mutex<Option<IncomingCopy>>,
+    /// Where image bytes live: `images/` next to the database.
+    images_dir: PathBuf,
+    /// An in-memory store gets a temporary folder, removed when it's dropped.
+    temp_images: bool,
 }
+
+static MEMORY_STORES: AtomicU64 = AtomicU64::new(0);
 
 #[uniffi::export]
 impl Store {
     /// Opens (or creates) the history database. Pass ":memory:" for tests.
     #[uniffi::constructor]
     pub fn open(path: String) -> Result<Arc<Self>> {
+        let temp_images = path == ":memory:";
+        let images_dir = if temp_images {
+            std::env::temp_dir().join(format!(
+                "holt-images-{}-{}",
+                std::process::id(),
+                MEMORY_STORES.fetch_add(1, Ordering::Relaxed)
+            ))
+        } else {
+            Path::new(&path)
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_default()
+                .join("images")
+        };
         let mut conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         let secret_key = migrate(&mut conn)?;
         let device_id = iroh::SecretKey::from_bytes(&secret_key)
             .public()
             .to_string();
-        Ok(Arc::new(Store {
+        std::fs::create_dir_all(&images_dir).map_err(|e| HoltError::Db(e.to_string()))?;
+        let store = Store {
             conn: Mutex::new(conn),
             secret_key,
             device_id,
             device_name: Mutex::new(None),
             changes: watch::channel(0).0,
             incoming_copy: Mutex::new(None),
-        }))
+            images_dir,
+            temp_images,
+        };
+        store.sweep_images()?;
+        Ok(Arc::new(store))
+    }
+
+    /// Records an image copy. `text` is the text recognized in the image, which
+    /// is what search matches. The same bytes copied again move the existing
+    /// clip to the top. Returns None for empty or oversized images.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_image(
+        &self,
+        bytes: Vec<u8>,
+        format: String,
+        width: u32,
+        height: u32,
+        thumb: Vec<u8>,
+        text: String,
+        source_app: Option<String>,
+    ) -> Result<Option<Clip>> {
+        if bytes.is_empty() || bytes.len() > MAX_IMAGE_BYTES || text.len() > MAX_CLIP_BYTES {
+            return Ok(None);
+        }
+        let key = blake3::hash(&bytes).to_hex().to_string();
+        let name = self.device_name.lock().unwrap().clone();
+        let clip = self.write(|tx, now, seq| {
+            self.write_image_file(&key, &format, &bytes)?;
+            Ok(tx.query_row(
+                &format!(
+                    "INSERT INTO clips (key, text, kind, source_app, created_at, updated_at, origin, seq, copied_by, copied_on,
+                                        format, width, height, bytes, thumb)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?6, ?8, ?9, ?10, ?11, ?12, ?13)
+                     ON CONFLICT(key) DO UPDATE SET
+                         text = excluded.text,
+                         source_app = excluded.source_app,
+                         created_at = excluded.created_at,
+                         updated_at = max(excluded.updated_at, clips.updated_at + 1),
+                         deleted = 0,
+                         origin = excluded.origin,
+                         seq = excluded.seq,
+                         copied_by = excluded.copied_by,
+                         copied_on = excluded.copied_on,
+                         format = excluded.format,
+                         width = excluded.width,
+                         height = excluded.height,
+                         bytes = excluded.bytes,
+                         thumb = excluded.thumb
+                     RETURNING {CLIP_COLUMNS}"
+                ),
+                params![
+                    key, text, ClipKind::Image as i64, source_app, now, self.device_id, seq, name,
+                    format, width, height, bytes.len() as i64, thumb
+                ],
+                |r| self.clip_from_row(r),
+            )?)
+        })?;
+        Ok(Some(clip))
     }
 
     /// This device's public key, which other devices know it by.
@@ -203,7 +326,7 @@ impl Store {
 
     /// Deletes the clip here and on every paired device.
     pub fn delete(&self, id: i64) -> Result<()> {
-        self.write(|tx, now, seq| tombstone(tx, id, now, seq, &self.device_id))
+        self.write(|tx, now, seq| self.tombstone(tx, id, now, seq))
     }
 
     /// Deletes every unpinned clip, here and on every paired device.
@@ -217,7 +340,7 @@ impl Store {
             ids
         };
         for id in ids {
-            self.write(|tx, now, seq| tombstone(tx, id, now, seq, &self.device_id))?;
+            self.write(|tx, now, seq| self.tombstone(tx, id, now, seq))?;
         }
         Ok(())
     }
@@ -239,6 +362,8 @@ impl Store {
              )",
             params![max_unpinned],
         )?;
+        drop(conn);
+        self.sweep_images()?;
         Ok((old + extra) as u32)
     }
 
@@ -266,19 +391,98 @@ impl Store {
         } else {
             None
         };
+        let kind = kind_from(row.get(1)?);
+        let image = if kind == ClipKind::Image {
+            let key: String = row.get(8)?;
+            let format: String = row.get::<_, Option<String>>(9)?.unwrap_or_default();
+            Some(ImageInfo {
+                path: self
+                    .image_path(&key, &format)
+                    .to_string_lossy()
+                    .into_owned(),
+                format,
+                width: row.get::<_, Option<u32>>(10)?.unwrap_or_default(),
+                height: row.get::<_, Option<u32>>(11)?.unwrap_or_default(),
+                bytes: row.get::<_, Option<i64>>(12)?.unwrap_or_default().max(0) as u64,
+                thumb: row.get::<_, Option<Vec<u8>>>(13)?.unwrap_or_default(),
+            })
+        } else {
+            None
+        };
         Ok(Clip {
             id: row.get(0)?,
-            kind: if row.get::<_, i64>(1)? == ClipKind::Link as i64 {
-                ClipKind::Link
-            } else {
-                ClipKind::Text
-            },
+            kind,
             text: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
             source_app: row.get(3)?,
             created_at: row.get(4)?,
             pinned: row.get(5)?,
             device,
+            image,
         })
+    }
+
+    fn image_path(&self, key: &str, format: &str) -> PathBuf {
+        let ext = match format {
+            "jpeg" => "jpg",
+            "heic" => "heic",
+            _ => "png",
+        };
+        self.images_dir.join(format!("{key}.{ext}"))
+    }
+
+    /// Writes the bytes unless the file is already there: the same image copied
+    /// again has the same key, so the same file.
+    fn write_image_file(&self, key: &str, format: &str, bytes: &[u8]) -> Result<()> {
+        let path = self.image_path(key, format);
+        if path.exists() {
+            return Ok(());
+        }
+        std::fs::write(&path, bytes).map_err(|e| HoltError::Db(format!("{}: {e}", path.display())))
+    }
+
+    /// Removes any file in `images/` that no live image clip points to: leftovers
+    /// of a crash between writing the file and the row, or of a prune.
+    fn sweep_images(&self) -> Result<()> {
+        let live: std::collections::HashSet<String> = {
+            let conn = self.conn.lock().unwrap();
+            let mut stmt = conn.prepare("SELECT key FROM clips WHERE kind = ?1 AND deleted = 0")?;
+            let keys = stmt.query_map(params![ClipKind::Image as i64], |r| r.get(0))?;
+            keys.collect::<std::result::Result<_, _>>()?
+        };
+        let entries =
+            std::fs::read_dir(&self.images_dir).map_err(|e| HoltError::Db(e.to_string()))?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let key = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            if !live.contains(key) {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+        Ok(())
+    }
+
+    /// Marks a clip deleted so the delete syncs, and drops its image file.
+    fn tombstone(&self, tx: &Transaction, id: i64, now: i64, seq: i64) -> Result<()> {
+        let image: Option<(String, Option<String>)> = tx
+            .query_row(
+                "SELECT key, format FROM clips WHERE id = ?1 AND deleted = 0 AND kind = ?2",
+                params![id, ClipKind::Image as i64],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        tx.execute(
+            "UPDATE clips SET text = NULL, source_app = NULL, pinned = 0, deleted = 1, thumb = NULL,
+                 updated_at = max(?1, updated_at + 1), origin = ?2, seq = ?3
+             WHERE id = ?4 AND deleted = 0",
+            params![now, self.device_id, seq, id],
+        )?;
+        if let Some((key, format)) = image {
+            let _ = std::fs::remove_file(self.image_path(&key, &format.unwrap_or_default()));
+        }
+        Ok(())
     }
 
     pub(crate) fn subscribe(&self) -> watch::Receiver<u64> {
@@ -303,7 +507,8 @@ impl Store {
     pub(crate) fn rows_since(&self, origin: &str, after: i64, limit: u32) -> Result<Vec<Row>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq, copied_by, copied_on
+            "SELECT key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq, copied_by, copied_on,
+                    format, width, height, thumb
              FROM clips WHERE origin = ?1 AND seq > ?2 ORDER BY seq LIMIT ?3",
         )?;
         let rows = stmt.query_map(params![origin, after, limit], |r| {
@@ -320,9 +525,24 @@ impl Store {
                 seq: r.get(9)?,
                 copied_by: r.get(10)?,
                 copied_on: r.get(11)?,
+                image: None,
+                format: r.get(12)?,
+                width: r.get(13)?,
+                height: r.get(14)?,
+                thumb: r.get::<_, Option<Vec<u8>>>(15)?.map(|t| BASE64.encode(t)),
             })
         })?;
-        Ok(rows.collect::<std::result::Result<_, _>>()?)
+        let mut rows: Vec<Row> = rows.collect::<std::result::Result<_, _>>()?;
+        // Live images travel with their bytes. A missing file leaves `image` empty
+        // and the peer drops the row, as it would a forged one.
+        for row in rows
+            .iter_mut()
+            .filter(|r| r.kind == ClipKind::Image as i64 && !r.deleted)
+        {
+            let path = self.image_path(&row.key, row.format.as_deref().unwrap_or_default());
+            row.image = std::fs::read(path).ok().map(|bytes| BASE64.encode(bytes));
+        }
+        Ok(rows)
     }
 
     /// Merges rows from a peer. For each clip the version with the newest
@@ -349,12 +569,29 @@ impl Store {
                      ON CONFLICT(origin) DO UPDATE SET seq = max(seq, excluded.seq)",
                     params![row.origin, row.seq],
                 )?;
-                // A live clip's key must match its text, or dedupe breaks.
-                if !row.deleted
-                    && row.text.as_deref().map(key_of).as_deref() != Some(row.key.as_str())
-                {
-                    continue;
-                }
+                // A live clip's key must match its text, or its bytes for an
+                // image, or dedupe breaks.
+                let is_image = row.kind == ClipKind::Image as i64;
+                let image = if is_image && !row.deleted {
+                    let Some(bytes) = row.image.as_deref().and_then(|b| BASE64.decode(b).ok())
+                    else {
+                        continue;
+                    };
+                    if bytes.is_empty()
+                        || bytes.len() > MAX_IMAGE_BYTES
+                        || blake3::hash(&bytes).to_hex().as_str() != row.key
+                    {
+                        continue;
+                    }
+                    Some(bytes)
+                } else {
+                    if !row.deleted
+                        && row.text.as_deref().map(key_of).as_deref() != Some(row.key.as_str())
+                    {
+                        continue;
+                    }
+                    None
+                };
                 let current: Option<(i64, String)> = tx
                     .query_row(
                         "SELECT updated_at, origin FROM clips WHERE key = ?1",
@@ -367,20 +604,33 @@ impl Store {
                         continue;
                     }
                 }
+                let format = row.format.clone().unwrap_or_default();
+                let thumb = row.thumb.as_deref().and_then(|t| BASE64.decode(t).ok());
                 tx.execute(
-                    "INSERT INTO clips (key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq, copied_by, copied_on)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                    "INSERT INTO clips (key, text, kind, source_app, created_at, updated_at, pinned, deleted, origin, seq, copied_by, copied_on,
+                                        format, width, height, bytes, thumb)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
                      ON CONFLICT(key) DO UPDATE SET
                          text = excluded.text, kind = excluded.kind, source_app = excluded.source_app,
                          created_at = excluded.created_at, updated_at = excluded.updated_at,
                          pinned = excluded.pinned, deleted = excluded.deleted,
                          origin = excluded.origin, seq = excluded.seq,
-                         copied_by = excluded.copied_by, copied_on = excluded.copied_on",
+                         copied_by = excluded.copied_by, copied_on = excluded.copied_on,
+                         format = excluded.format, width = excluded.width, height = excluded.height,
+                         bytes = excluded.bytes, thumb = excluded.thumb",
                     params![
                         row.key, row.text, row.kind, row.source_app, row.created_at, row.updated_at,
-                        row.pinned, row.deleted, row.origin, row.seq, row.copied_by, row.copied_on
+                        row.pinned, row.deleted, row.origin, row.seq, row.copied_by, row.copied_on,
+                        row.format, row.width, row.height, image.as_ref().map(|b| b.len() as i64), thumb
                     ],
                 )?;
+                match &image {
+                    Some(bytes) => self.write_image_file(&row.key, &format, bytes)?,
+                    None if is_image => {
+                        let _ = std::fs::remove_file(self.image_path(&row.key, &format));
+                    }
+                    None => {}
+                }
                 changed = true;
                 let is_new_copy = !row.deleted
                     && row.created_at > newest_before
@@ -395,6 +645,8 @@ impl Store {
                             .copied_on
                             .clone()
                             .unwrap_or_else(|| "another device".into()),
+                        image_format: image.is_some().then_some(format),
+                        image,
                     };
                     live_copy = Some((row.created_at, copy));
                 }
@@ -460,14 +712,12 @@ impl Store {
     }
 }
 
-fn tombstone(tx: &Transaction, id: i64, now: i64, seq: i64, origin: &str) -> Result<()> {
-    tx.execute(
-        "UPDATE clips SET text = NULL, source_app = NULL, pinned = 0, deleted = 1,
-             updated_at = max(?1, updated_at + 1), origin = ?2, seq = ?3
-         WHERE id = ?4 AND deleted = 0",
-        params![now, origin, seq, id],
-    )?;
-    Ok(())
+impl Drop for Store {
+    fn drop(&mut self) {
+        if self.temp_images {
+            let _ = std::fs::remove_dir_all(&self.images_dir);
+        }
+    }
 }
 
 /// Creates or upgrades the schema and returns this device's secret key.
@@ -545,6 +795,18 @@ fn migrate(conn: &mut Connection) -> Result<[u8; 32]> {
              PRAGMA user_version = 2;",
         )?;
     }
+    if version < 3 {
+        // Image clips: the bytes are in images/<key>.<ext>, the row keeps what
+        // the list and preview need without opening the file.
+        tx.execute_batch(
+            "ALTER TABLE clips ADD COLUMN format TEXT;
+             ALTER TABLE clips ADD COLUMN width INTEGER;
+             ALTER TABLE clips ADD COLUMN height INTEGER;
+             ALTER TABLE clips ADD COLUMN bytes INTEGER;
+             ALTER TABLE clips ADD COLUMN thumb BLOB;
+             PRAGMA user_version = 3;",
+        )?;
+    }
     let hex: String = tx.query_row("SELECT value FROM meta WHERE key = 'secret_key'", [], |r| {
         r.get(0)
     })?;
@@ -573,7 +835,16 @@ fn escape_like(s: &str) -> String {
         .replace('_', "\\_")
 }
 
-const CLIP_COLUMNS: &str = "id, kind, text, source_app, created_at, pinned, copied_by, copied_on";
+fn kind_from(stored: i64) -> ClipKind {
+    match stored {
+        1 => ClipKind::Link,
+        2 => ClipKind::Image,
+        _ => ClipKind::Text,
+    }
+}
+
+const CLIP_COLUMNS: &str =
+    "id, kind, text, source_app, created_at, pinned, copied_by, copied_on, key, format, width, height, bytes, thumb";
 
 fn to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -805,6 +1076,170 @@ mod tests {
         rows[0].text = Some("forged".into());
         b.apply(rows).unwrap();
         assert!(all(&b).is_empty());
+    }
+
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\n fake screenshot bytes";
+
+    fn add_png(s: &Store, text: &str) -> Clip {
+        s.add_image(
+            PNG.to_vec(),
+            "png".into(),
+            640,
+            480,
+            vec![1, 2, 3],
+            text.into(),
+            Some("com.apple.screencaptureui".into()),
+        )
+        .unwrap()
+        .unwrap()
+    }
+
+    #[test]
+    fn same_image_copied_twice_is_one_clip_with_one_file() {
+        let s = store();
+        let first = add_png(&s, "");
+        tick();
+        s.add("in between".into(), None).unwrap();
+        tick();
+        let again = add_png(&s, "Invoice 2026");
+
+        assert_eq!(again.id, first.id);
+        assert_eq!(again.kind, ClipKind::Image);
+        assert_eq!(again.text, "Invoice 2026");
+        let image = again.image.unwrap();
+        assert_eq!(
+            (image.width, image.height, image.bytes),
+            (640, 480, PNG.len() as u64)
+        );
+        assert_eq!(image.format, "png");
+        assert_eq!(image.thumb, vec![1, 2, 3]);
+        assert_eq!(std::fs::read(&image.path).unwrap(), PNG);
+        assert!(image
+            .path
+            .ends_with(&format!("{}.png", blake3::hash(PNG).to_hex())));
+        let clips = s.search("".into(), 10).unwrap();
+        assert_eq!(clips.len(), 2);
+        assert_eq!(clips[0].id, first.id);
+        assert_eq!(clips[1].text, "in between");
+        assert!(clips[1].image.is_none());
+    }
+
+    #[test]
+    fn skips_empty_and_huge_images() {
+        let s = store();
+        assert!(s
+            .add_image(vec![], "png".into(), 1, 1, vec![], "".into(), None)
+            .unwrap()
+            .is_none());
+        assert!(s
+            .add_image(
+                vec![0; MAX_IMAGE_BYTES + 1],
+                "png".into(),
+                1,
+                1,
+                vec![],
+                "".into(),
+                None
+            )
+            .unwrap()
+            .is_none());
+        assert!(s.search("".into(), 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn search_finds_images_by_the_text_in_them() {
+        let s = store();
+        add_png(&s, "Invoice #2031\nTotal 120 €");
+        s.add("invoice email".into(), None).unwrap();
+
+        let hits = s.search("invoice total".into(), 10).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, ClipKind::Image);
+        assert_eq!(s.search("invoice".into(), 10).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn deleting_or_pruning_an_image_removes_its_file() {
+        let s = store();
+        let clip = add_png(&s, "");
+        let path = clip.image.unwrap().path;
+        assert!(std::path::Path::new(&path).exists());
+        s.delete(clip.id).unwrap();
+        assert!(!std::path::Path::new(&path).exists());
+        assert!(all(&s).is_empty());
+
+        let clip = add_png(&s, "");
+        let path = clip.image.unwrap().path;
+        s.clear().unwrap();
+        assert!(!std::path::Path::new(&path).exists());
+
+        let clip = add_png(&s, "");
+        let path = clip.image.unwrap().path;
+        tick();
+        s.add("newer".into(), None).unwrap();
+        assert_eq!(s.prune(30, 1).unwrap(), 1);
+        assert!(!std::path::Path::new(&path).exists());
+    }
+
+    #[test]
+    fn images_sync_with_their_bytes() {
+        let (a, b) = (store(), store());
+        a.set_device_name("MacBook Pro");
+        let on_a = add_png(&a, "Invoice 2026");
+        sync(&a, &b);
+
+        let clips = b.search("".into(), 10).unwrap();
+        assert_eq!(clips.len(), 1);
+        assert_eq!(clips[0].kind, ClipKind::Image);
+        assert_eq!(clips[0].text, "Invoice 2026");
+        assert_eq!(clips[0].device.as_deref(), Some("MacBook Pro"));
+        let image = clips[0].image.clone().unwrap();
+        assert_ne!(image.path, on_a.image.unwrap().path);
+        assert_eq!(std::fs::read(&image.path).unwrap(), PNG);
+        assert_eq!(
+            (image.width, image.height, image.thumb.clone()),
+            (640, 480, vec![1, 2, 3])
+        );
+
+        let copy = b.take_incoming_copy().unwrap();
+        assert_eq!(copy.image.as_deref(), Some(PNG));
+        assert_eq!(copy.image_format.as_deref(), Some("png"));
+
+        a.delete(on_a.id).unwrap();
+        sync(&a, &b);
+        assert!(all(&b).is_empty());
+        assert!(!std::path::Path::new(&image.path).exists());
+    }
+
+    #[test]
+    fn rejects_images_whose_bytes_do_not_match_key() {
+        let (a, b) = (store(), store());
+        add_png(&a, "");
+        let mut rows = a.rows_since(&a.device_id(), 0, 10).unwrap();
+        rows[0].image = Some(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            b"forged",
+        ));
+        b.apply(rows).unwrap();
+        assert!(all(&b).is_empty());
+    }
+
+    #[test]
+    fn opening_removes_image_files_without_a_clip() {
+        let dir = std::env::temp_dir().join(format!("holt-sweep-{}", now_ms()));
+        std::fs::create_dir_all(dir.join("images")).unwrap();
+        let path = dir.join("holt.db");
+        let stray = dir.join("images").join("stray.png");
+        std::fs::write(&stray, b"x").unwrap();
+        let kept = {
+            let s = Store::open(path.to_string_lossy().into()).unwrap();
+            add_png(&s, "").image.unwrap().path
+        };
+        let _s = Store::open(path.to_string_lossy().into()).unwrap();
+        assert!(!stray.exists());
+        assert!(std::path::Path::new(&kept).exists());
+        assert!(kept.starts_with(dir.join("images").to_str().unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
