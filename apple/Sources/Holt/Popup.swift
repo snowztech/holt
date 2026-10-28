@@ -834,7 +834,10 @@ private let relative: RelativeDateTimeFormatter = {
 }()
 
 private func longAge(_ clip: Clip) -> String {
-    relative.localizedString(for: date(clip), relativeTo: Date())
+    // Under a minute, or from a Mac whose clock runs ahead, it would read "in 0 seconds".
+    let now = Date()
+    let copied = min(date(clip), now)
+    return now.timeIntervalSince(copied) < 60 ? "just now" : relative.localizedString(for: copied, relativeTo: now)
 }
 
 func oneLine(_ text: String) -> String {
