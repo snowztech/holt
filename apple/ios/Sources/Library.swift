@@ -57,7 +57,13 @@ final class Library {
     }
 
     func copy(_ clip: Clip) {
-        UIPasteboard.general.string = clip.text
+        if let image = clip.image {
+            // An image clip's text is only what was read in it.
+            guard let bytes = FileManager.default.contents(atPath: image.path) else { return }
+            UIPasteboard.general.setData(bytes, forPasteboardType: "public.\(image.format)")
+        } else {
+            UIPasteboard.general.string = clip.text
+        }
         markCopySeen()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         show("Copied")

@@ -88,7 +88,11 @@ struct HomeView: View {
                             }
                             .contextMenu {
                                 Button("Copy", systemImage: "doc.on.doc") { library.copy(clip) }
-                                ShareLink(item: clip.text)
+                                if let image = clip.image {
+                                    ShareLink(item: URL(fileURLWithPath: image.path))
+                                } else {
+                                    ShareLink(item: clip.text)
+                                }
                                 Button(clip.pinned ? "Unpin" : "Pin", systemImage: "pin") { library.togglePin(clip) }
                                 Button("Delete", systemImage: "trash", role: .destructive) { library.delete(clip) }
                             }
@@ -335,7 +339,8 @@ private func source(_ clip: Clip, _ showDevice: Bool) -> String? {
 
 /// The start of a clip, enough for a few lines, and cheap to render even when the clip is a whole log file.
 private func preview(_ clip: Clip) -> String {
-    String(clip.text.prefix(500)).trimmingCharacters(in: .whitespacesAndNewlines)
+    if let image = clip.image, clip.text.isEmpty { return "Image \(image.width)×\(image.height)" }
+    return String(clip.text.prefix(500)).trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 /// "Just now", "5 min. ago". Updates on its own, since the list only redraws when clips change.
