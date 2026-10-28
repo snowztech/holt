@@ -69,7 +69,7 @@ On first launch, a short checklist walks you through setup:
 
 ## Docs
 
-[holt.snowztech.com/docs](https://holt.snowztech.com/docs) covers everything Holt does: search and paste, pins, images, sync, Raycast and Alfred, settings, keyboard shortcuts and troubleshooting.
+[holt.snowztech.com/docs](https://holt.snowztech.com/docs) covers everything Holt does: search and paste, pins, images, sync, Alfred, settings, keyboard shortcuts and troubleshooting.
 
 ## Sync between Macs
 
