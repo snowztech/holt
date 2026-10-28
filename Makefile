@@ -73,7 +73,7 @@ run: mac
 	-pkill -x Holt
 	open $(APP)
 
-test:
+test: core
 	cd core && cargo test
 	cd apple && swift test
 
