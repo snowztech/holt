@@ -78,6 +78,7 @@ final class PopupController {
     private let panel: PopupPanel
     private let model: PopupModel
     private let onPick: (Clip) -> Void
+    private let lightbox = Lightbox()
     private var keyMonitor: Any?
 
     init(store: Store, syncStatus: @escaping () -> SyncStatus?, onPick: @escaping (Clip) -> Void) {
@@ -98,7 +99,12 @@ final class PopupController {
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             panel.standardWindowButton(button)?.isHidden = true
         }
-        panel.contentView = NSHostingView(rootView: PopupView(model: model, onPick: { [weak self] in self?.onPick($0) }))
+        panel.contentView = NSHostingView(
+            rootView: PopupView(
+                model: model,
+                onPick: { [weak self] in self?.onPick($0) },
+                canPreview: { [weak self] in self?.canPreview ?? false }))
+        lightbox.onDismiss = { [weak self] in self?.lightbox.hide() }
 
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.close() }
@@ -128,9 +134,32 @@ final class PopupController {
     }
 
     func close() {
+        lightbox.hide()
         panel.orderOut(nil)
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
+    }
+
+    /// Space shows the selected image full size, as in Finder. Only while the
+    /// search field is empty, so a space in a query stays a space.
+    private var canPreview: Bool { model.query.isEmpty && model.selected?.image != nil }
+
+    private func togglePreview() {
+        if lightbox.isVisible {
+            lightbox.hide()
+        } else if let image = model.selected?.image {
+            lightbox.show(image, over: panel)
+        }
+    }
+
+    /// Keeps the full-size view on the selected clip as ↑↓ move through the list.
+    private func followSelection() {
+        guard lightbox.isVisible else { return }
+        if canPreview, let image = model.selected?.image {
+            lightbox.show(image, over: panel)
+        } else {
+            lightbox.hide()
+        }
     }
 
     /// Picks up clips that arrive from another device while the popup is open.
@@ -146,10 +175,11 @@ final class PopupController {
             return event
         }
         switch Int(event.keyCode) {
-        case 125: model.move(1)  // ↓
-        case 126: model.move(-1)  // ↑
+        case 125: model.move(1); followSelection()  // ↓
+        case 126: model.move(-1); followSelection()  // ↑
         case 36, 76: if let clip = model.selected { onPick(clip) }  // return, enter
-        case 53: close()  // esc
+        case 53: lightbox.isVisible ? lightbox.hide() : close()  // esc
+        case 49 where canPreview: togglePreview()  // space
         case 51 where command: model.deleteSelected()  // ⌘⌫
         default:
             guard command, let key = event.charactersIgnoringModifiers else { return event }
@@ -168,9 +198,88 @@ final class PopupController {
     }
 }
 
+/// The selected image full size, over the popup. Not Quick Look: that panel
+/// only shows for the active app, and Holt stays inactive so the app the user
+/// was in keeps the paste.
+@MainActor
+final class Lightbox {
+    private let panel: NSPanel
+    var onDismiss: (() -> Void)?
+
+    init() {
+        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+    }
+
+    var isVisible: Bool { panel.isVisible }
+
+    /// Sized to the image at 1:1 on this screen, or to fit the screen, whichever is smaller.
+    func show(_ image: ImageInfo, over popup: NSWindow) {
+        guard let screen = popup.screen ?? NSScreen.main else { return }
+        show(image, on: screen, fraction: 1, above: popup)
+    }
+
+    /// `fraction` is how much of the screen the view may take.
+    func show(_ image: ImageInfo, on screen: NSScreen, fraction: CGFloat, above window: NSWindow? = nil) {
+        let visible = screen.visibleFrame.insetBy(dx: 40, dy: 40)
+        let room = visible.insetBy(dx: visible.width * (1 - fraction) / 2, dy: visible.height * (1 - fraction) / 2)
+        let natural = NSSize(
+            width: CGFloat(image.width) / screen.backingScaleFactor, height: CGFloat(image.height) / screen.backingScaleFactor)
+        let fit = min(room.width / max(natural.width, 1), room.height / max(natural.height, 1), 1)
+        let size = NSSize(width: max(natural.width * fit, 160), height: max(natural.height * fit, 100))
+        panel.contentView = NSHostingView(rootView: LightboxView(image: image, onTap: { [weak self] in self?.onDismiss?() }))
+        panel.setFrame(
+            NSRect(x: room.midX - size.width / 2, y: room.midY - size.height / 2, width: size.width, height: size.height), display: true)
+        // Ordered, never made key: the popup keeps the keyboard.
+        if let window {
+            panel.order(.above, relativeTo: window.windowNumber)
+        } else {
+            panel.orderFrontRegardless()
+        }
+    }
+
+    func hide() {
+        panel.orderOut(nil)
+        panel.contentView = nil
+    }
+}
+
+private struct LightboxView: View {
+    let image: ImageInfo
+    let onTap: () -> Void
+    @State private var loaded: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let picture = loaded ?? NSImage(data: image.thumb) {
+                Image(nsImage: picture)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.1)))
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+        .task(id: image.path) {
+            let path = image.path
+            let picture = await Task.detached(priority: .userInitiated) { Images.preview(path: path, maxPixels: 5000) }.value
+            if !Task.isCancelled { loaded = picture }
+        }
+    }
+}
+
 struct PopupView: View {
     @ObservedObject var model: PopupModel
     let onPick: (Clip) -> Void
+    let canPreview: () -> Bool
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -201,7 +310,7 @@ struct PopupView: View {
             }
 
             Divider()
-            ActionBar(clip: model.selected, targetApp: model.targetApp, sync: model.sync)
+            ActionBar(clip: model.selected, targetApp: model.targetApp, sync: model.sync, canPreview: canPreview())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial)
@@ -383,6 +492,7 @@ private struct ActionBar: View {
     let clip: Clip?
     let targetApp: String?
     let sync: SyncStatus?
+    let canPreview: Bool
 
     var body: some View {
         HStack(spacing: 18) {
@@ -396,6 +506,7 @@ private struct ActionBar: View {
             }
             Spacer()
             if let clip {
+                if canPreview { action("Full size", "␣") }
                 if openURL(clip) != nil { action("Open", "⌘O") }
                 action(clip.pinned ? "Unpin" : "Pin", "⌘P")
                 action("Delete", "⌘⌫")

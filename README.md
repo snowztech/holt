@@ -76,6 +76,7 @@ On first launch, a short checklist walks you through setup:
 | ↩ | Paste the clip |
 | ⌘1 to ⌘9 | Paste one of the first nine. Hold ⌘ to see the numbers. |
 | ⌘P | Pin or unpin |
+| space | Show an image full size, in the popup or the menu bar menu |
 | ⌘O | Open a link, or an image in Preview |
 | ⌘⌫ | Delete, here and on your other Macs |
 | esc | Close |

@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import HoltCore
 import SystemConfiguration
 import os
@@ -34,6 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settings: SettingsWindow!
     private var welcome: WelcomeWindow?
     private let toast = ArrivalToast()
+    /// Shows the highlighted image of the menu's Recent list full size, on space.
+    private let menuPreview = Lightbox()
+    private var highlighted: Clip?
+    private var menuKeyTap: CFMachPort?
     private let updates = Updates()
     private var pruneTimer: Timer?
     private var askedForAccessibility = false
@@ -147,8 +152,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let item = NSMenuItem(
                     title: title.count > 44 ? String(title.prefix(43)) + "…" : title, action: #selector(copyRecent(_:)), keyEquivalent: "")
                 item.representedObject = clip
-                item.image = AppInfo.icon(clip.sourceApp).map(resized) ?? symbol("doc.on.clipboard")
-                item.toolTip = clip.text.count > 44 || clip.image != nil ? String(clip.text.prefix(400)) : nil
+                item.image =
+                    clip.image.flatMap { menuThumbnail($0) } ?? AppInfo.icon(clip.sourceApp).map(resized) ?? symbol("doc.on.clipboard")
+                // Images get the preview instead of a tooltip.
+                item.toolTip = clip.image == nil && clip.text.count > 44 ? String(clip.text.prefix(400)) : nil
                 menu.addItem(item)
             }
             menu.addItem(.separator())
@@ -179,6 +186,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for item in menu.items where item.action != nil {
             item.target = self
         }
+    }
+
+    // MARK: Menu preview
+
+    // Space shows the highlighted image full size. A menu takes every key
+    // itself (space picks the row), so while the menu is open an event tap
+    // catches space first, which needs the Accessibility access Holt already
+    // uses to paste. Without it the menu behaves as usual.
+
+    func menuWillOpen(_ menu: NSMenu) {
+        startMenuKeyTap()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        stopMenuKeyTap()
+        menuPreview.hide()
+        highlighted = nil
+    }
+
+    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        highlighted = item?.representedObject as? Clip
+        // An open preview follows the highlight, and goes away on a text row.
+        if menuPreview.isVisible, !showMenuPreview() {
+            menuPreview.hide()
+        }
+    }
+
+    /// Returns false when nothing was done, so the key goes to the menu.
+    fileprivate func toggleMenuPreview() -> Bool {
+        if menuPreview.isVisible {
+            menuPreview.hide()
+            return true
+        }
+        return showMenuPreview()
+    }
+
+    private func showMenuPreview() -> Bool {
+        guard let image = highlighted?.image, let screen = statusItem.button?.window?.screen ?? NSScreen.main else { return false }
+        menuPreview.show(image, on: screen, fraction: 0.6)
+        return true
+    }
+
+    private func startMenuKeyTap() {
+        guard menuKeyTap == nil, Permissions.autoPaste else { return }
+        let callback: CGEventTapCallBack = { _, type, event, refcon in
+            guard let refcon else { return Unmanaged.passUnretained(event) }
+            let delegate = Unmanaged<AppDelegate>.fromOpaque(refcon).takeUnretainedValue()
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                MainActor.assumeIsolated { delegate.menuKeyTap.map { CGEvent.tapEnable(tap: $0, enable: true) } }
+                return Unmanaged.passUnretained(event)
+            }
+            guard type == .keyDown, event.getIntegerValueField(.keyboardEventKeycode) == kVK_Space else {
+                return Unmanaged.passUnretained(event)
+            }
+            return MainActor.assumeIsolated { delegate.toggleMenuPreview() } ? nil : Unmanaged.passUnretained(event)
+        }
+        guard
+            let tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+                eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+                callback: callback, userInfo: Unmanaged.passUnretained(self).toOpaque())
+        else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        menuKeyTap = tap
+    }
+
+    private func stopMenuKeyTap() {
+        guard let tap = menuKeyTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
+        CFMachPortInvalidate(tap)
+        menuKeyTap = nil
     }
 
     @objc private func openPopup() { popup.show() }
@@ -282,6 +361,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let copy = image.copy() as! NSImage
         copy.size = NSSize(width: 16, height: 16)
         return copy
+    }
+
+    /// The clip's thumbnail at menu size: 32 pt tall at most, 56 pt wide at most.
+    private func menuThumbnail(_ image: ImageInfo) -> NSImage? {
+        guard let thumb = NSImage(data: image.thumb), image.width > 0, image.height > 0 else { return nil }
+        let scale = min(32 / CGFloat(image.height), 56 / CGFloat(image.width))
+        thumb.size = NSSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+        return thumb
     }
 
     /// The name set in System Settings → General → Sharing, like "Lucas's MacBook Pro".
