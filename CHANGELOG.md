@@ -4,6 +4,22 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-28
+
+Images work the way you'd expect: from Finder, from your iPhone, and the right way up.
+
+### Added
+
+- Copy an image file in Finder and Holt keeps the picture, not the file name.
+- The preview shows images larger. While you search, it shows the text found in the image, with your words in bold.
+- Copies that arrive through Universal Clipboard say so, instead of naming the app that was in front.
+
+### Fixed
+
+- Photos from an iPhone are measured and pasted the right way up. Before, most apps got them sideways.
+- Image rows are titled by their size, instead of the text read in them.
+- A clip copied seconds ago says "just now", not "in 0 seconds".
+
 ## [0.1.4] - 2026-10-28
 
 Holt keeps the images you copy now, and works from Alfred.
@@ -69,7 +85,8 @@ The first release. Holt keeps everything you copy on your Mac, and pairs your Ma
 - A first-launch checklist for the permissions Holt needs, and a setting to open Holt at login.
 - Settings to change the shortcut and choose how long to keep history.
 
-[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/snowztech/holt/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/snowztech/holt/releases/tag/v0.1.5
 [0.1.4]: https://github.com/snowztech/holt/releases/tag/v0.1.4
 [0.1.3]: https://github.com/snowztech/holt/releases/tag/v0.1.3
 [0.1.2]: https://github.com/snowztech/holt/releases/tag/v0.1.2
