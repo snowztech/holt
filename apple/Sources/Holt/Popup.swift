@@ -69,8 +69,49 @@ final class PopupModel: ObservableObject {
 
 /// Floating panel that takes the keyboard without activating Holt, so the app
 /// the user was typing in stays frontmost and gets the paste.
-private final class PopupPanel: NSPanel {
+final class PopupPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    private var pressedRow: DragSource.DragView?
+
+    /// SwiftUI's scroll view keeps every click for itself, so AppKit views in
+    /// the rows never see one. Mouse events are handed to the row under the
+    /// cursor here instead.
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            if let row = row(at: event.locationInWindow) {
+                pressedRow = row
+                row.mouseDown(with: event)
+                return
+            }
+        case .leftMouseDragged:
+            if let pressedRow {
+                pressedRow.mouseDragged(with: event)
+                return
+            }
+        case .leftMouseUp:
+            if let pressedRow {
+                self.pressedRow = nil
+                pressedRow.mouseUp(with: event)
+                return
+            }
+        default:
+            break
+        }
+        super.sendEvent(event)
+    }
+
+    private func row(at point: NSPoint) -> DragSource.DragView? {
+        guard let contentView else { return nil }
+        return rows(in: contentView).first { row in
+            row.bounds.intersection(row.visibleRect).contains(row.convert(point, from: nil))
+        }
+    }
+
+    private func rows(in view: NSView) -> [DragSource.DragView] {
+        view.subviews.flatMap { ($0 as? DragSource.DragView).map { [$0] } ?? rows(in: $0) }
+    }
 }
 
 @MainActor
@@ -78,6 +119,7 @@ final class PopupController {
     private let panel: PopupPanel
     private let model: PopupModel
     private let onPick: (Clip) -> Void
+    private let lightbox = Lightbox()
     private var keyMonitor: Any?
 
     init(store: Store, syncStatus: @escaping () -> SyncStatus?, onPick: @escaping (Clip) -> Void) {
@@ -98,7 +140,12 @@ final class PopupController {
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             panel.standardWindowButton(button)?.isHidden = true
         }
-        panel.contentView = NSHostingView(rootView: PopupView(model: model, onPick: { [weak self] in self?.onPick($0) }))
+        panel.contentView = NSHostingView(
+            rootView: PopupView(
+                model: model,
+                onPick: { [weak self] in self?.onPick($0) },
+                canPreview: { [weak self] in self?.canPreview ?? false }))
+        lightbox.onDismiss = { [weak self] in self?.lightbox.hide() }
 
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.close() }
@@ -128,9 +175,32 @@ final class PopupController {
     }
 
     func close() {
+        lightbox.hide()
         panel.orderOut(nil)
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
+    }
+
+    /// Space shows the selected image full size, as in Finder. Only while the
+    /// search field is empty, so a space in a query stays a space.
+    private var canPreview: Bool { model.query.isEmpty && model.selected?.image != nil }
+
+    private func togglePreview() {
+        if lightbox.isVisible {
+            lightbox.hide()
+        } else if let image = model.selected?.image {
+            lightbox.show(image, over: panel)
+        }
+    }
+
+    /// Keeps the full-size view on the selected clip as ↑↓ move through the list.
+    private func followSelection() {
+        guard lightbox.isVisible else { return }
+        if canPreview, let image = model.selected?.image {
+            lightbox.show(image, over: panel)
+        } else {
+            lightbox.hide()
+        }
     }
 
     /// Picks up clips that arrive from another device while the popup is open.
@@ -146,16 +216,17 @@ final class PopupController {
             return event
         }
         switch Int(event.keyCode) {
-        case 125: model.move(1)  // ↓
-        case 126: model.move(-1)  // ↑
+        case 125: model.move(1); followSelection()  // ↓
+        case 126: model.move(-1); followSelection()  // ↑
         case 36, 76: if let clip = model.selected { onPick(clip) }  // return, enter
-        case 53: close()  // esc
+        case 53: lightbox.isVisible ? lightbox.hide() : close()  // esc
+        case 49 where canPreview: togglePreview()  // space
         case 51 where command: model.deleteSelected()  // ⌘⌫
         default:
             guard command, let key = event.charactersIgnoringModifiers else { return event }
             if key == "p" {
                 model.togglePin()
-            } else if key == "o", let clip = model.selected, clip.kind == .link, let url = linkURL(clip) {
+            } else if key == "o", let clip = model.selected, let url = openURL(clip) {
                 close()
                 NSWorkspace.shared.open(url)
             } else if let n = Int(key), (1...9).contains(n), model.clips.indices.contains(n - 1) {
@@ -168,9 +239,88 @@ final class PopupController {
     }
 }
 
+/// The selected image full size, over the popup. Not Quick Look: that panel
+/// only shows for the active app, and Holt stays inactive so the app the user
+/// was in keeps the paste.
+@MainActor
+final class Lightbox {
+    private let panel: NSPanel
+    var onDismiss: (() -> Void)?
+
+    init() {
+        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+    }
+
+    var isVisible: Bool { panel.isVisible }
+
+    /// Sized to the image at 1:1 on this screen, or to fit the screen, whichever is smaller.
+    func show(_ image: ImageInfo, over popup: NSWindow) {
+        guard let screen = popup.screen ?? NSScreen.main else { return }
+        show(image, on: screen, fraction: 1, above: popup)
+    }
+
+    /// `fraction` is how much of the screen the view may take.
+    func show(_ image: ImageInfo, on screen: NSScreen, fraction: CGFloat, above window: NSWindow? = nil) {
+        let visible = screen.visibleFrame.insetBy(dx: 40, dy: 40)
+        let room = visible.insetBy(dx: visible.width * (1 - fraction) / 2, dy: visible.height * (1 - fraction) / 2)
+        let natural = NSSize(
+            width: CGFloat(image.width) / screen.backingScaleFactor, height: CGFloat(image.height) / screen.backingScaleFactor)
+        let fit = min(room.width / max(natural.width, 1), room.height / max(natural.height, 1), 1)
+        let size = NSSize(width: max(natural.width * fit, 160), height: max(natural.height * fit, 100))
+        panel.contentView = NSHostingView(rootView: LightboxView(image: image, onTap: { [weak self] in self?.onDismiss?() }))
+        panel.setFrame(
+            NSRect(x: room.midX - size.width / 2, y: room.midY - size.height / 2, width: size.width, height: size.height), display: true)
+        // Ordered, never made key: the popup keeps the keyboard.
+        if let window {
+            panel.order(.above, relativeTo: window.windowNumber)
+        } else {
+            panel.orderFrontRegardless()
+        }
+    }
+
+    func hide() {
+        panel.orderOut(nil)
+        panel.contentView = nil
+    }
+}
+
+private struct LightboxView: View {
+    let image: ImageInfo
+    let onTap: () -> Void
+    @State private var loaded: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let picture = loaded ?? NSImage(data: image.thumb) {
+                Image(nsImage: picture)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.1)))
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+        .task(id: image.path) {
+            let path = image.path
+            let picture = await Task.detached(priority: .userInitiated) { Images.preview(path: path, maxPixels: 5000) }.value
+            if !Task.isCancelled { loaded = picture }
+        }
+    }
+}
+
 struct PopupView: View {
     @ObservedObject var model: PopupModel
     let onPick: (Clip) -> Void
+    let canPreview: () -> Bool
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -201,7 +351,7 @@ struct PopupView: View {
             }
 
             Divider()
-            ActionBar(clip: model.selected, targetApp: model.targetApp, sync: model.sync)
+            ActionBar(clip: model.selected, targetApp: model.targetApp, sync: model.sync, canPreview: canPreview())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial)
@@ -231,9 +381,11 @@ struct PopupView: View {
                             selected: index == model.selection
                         )
                         .id(clip.id)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) { onPick(clip) }
-                        .onTapGesture { model.selection = index }
+                        .overlay(
+                            DragSource(
+                                clip: clip,
+                                onClick: { model.selection = index },
+                                onDoubleClick: { onPick(clip) }))
                     }
                 }
                 .padding(8)
@@ -254,11 +406,21 @@ private struct ClipRow: View {
     var body: some View {
         HStack(spacing: 10) {
             SourceIcon(clip: clip).frame(width: 18, height: 18)
-            Text(highlight(oneLine(clip.text), query))
+            if let image = clip.image {
+                Thumbnail(data: image.thumb, maxWidth: 40, maxHeight: 24)
+            }
+            Text(highlight(rowLabel(clip), query))
                 .font(.system(size: 13.5))
+                .foregroundStyle(clip.image != nil && clip.text.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 12)
+            if let image = clip.image, !clip.text.isEmpty {
+                Text(dimensions(image))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
             if clip.pinned {
                 Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Brand.river)
             }
@@ -300,7 +462,25 @@ private struct ClipPreview: View {
                 Text(meta).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             }
 
-            if clip.kind == .link {
+            if let image = clip.image {
+                ImagePreview(image: image)
+                Text("\(dimensions(image)) · \(image.format.uppercased()) · \(fileSize(image.bytes))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                if !clip.text.isEmpty {
+                    // The first lines only, and not selectable: laying out a screenshot's
+                    // worth of recognized text costs hundreds of milliseconds per keypress.
+                    // The whole text is still what search matches.
+                    Text(recognizedExcerpt)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 0)
+                } else {
+                    Spacer(minLength: 0)
+                }
+            } else if clip.kind == .link {
                 linkCard
                 Spacer(minLength: 0)
             } else if isShort {
@@ -324,6 +504,12 @@ private struct ClipPreview: View {
     }
 
     private var lineCount: Int { clip.text.split(whereSeparator: \.isNewline).count }
+
+    private var recognizedExcerpt: String {
+        let lines = clip.text.split(whereSeparator: \.isNewline)
+        let excerpt = lines.prefix(12).map { String($0.prefix(120)) }.joined(separator: "\n")
+        return lines.count > 12 ? excerpt + "\n…" : excerpt
+    }
     private var isShort: Bool { lineCount <= 1 && clip.text.count <= 90 }
 
     private var meta: String {
@@ -356,6 +542,7 @@ private struct ActionBar: View {
     let clip: Clip?
     let targetApp: String?
     let sync: SyncStatus?
+    let canPreview: Bool
 
     var body: some View {
         HStack(spacing: 18) {
@@ -369,7 +556,8 @@ private struct ActionBar: View {
             }
             Spacer()
             if let clip {
-                if clip.kind == .link { action("Open", "⌘O") }
+                if canPreview { action("Full size", "␣") }
+                if openURL(clip) != nil { action("Open", "⌘O") }
                 action(clip.pinned ? "Unpin" : "Pin", "⌘P")
                 action("Delete", "⌘⌫")
                 action(targetApp.map { "Paste in \($0)" } ?? "Paste", "↩", primary: true)
@@ -417,8 +605,71 @@ struct SourceIcon: View {
         if let icon = AppInfo.icon(clip.sourceApp) {
             Image(nsImage: icon).resizable()
         } else {
-            Image(systemName: clip.kind == .link ? "link" : "text.alignleft")
+            Image(systemName: fallback)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var fallback: String {
+        switch clip.kind {
+        case .link: "link"
+        case .image: "photo"
+        case .text: "text.alignleft"
+        }
+    }
+}
+
+/// A clip's stored thumbnail, a few kilobytes, so the list never opens the file.
+private struct Thumbnail: View {
+    let data: Data
+    let maxWidth: CGFloat
+    let maxHeight: CGFloat
+
+    var body: some View {
+        if let image = NSImage(data: data) {
+            // A fixed box, filled: a tall screenshot would otherwise be a sliver.
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: maxWidth, height: maxHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        }
+    }
+}
+
+/// The image decoded for the preview pane, off the main thread and cached, with
+/// the thumbnail standing in while it loads.
+private struct ImagePreview: View {
+    let image: ImageInfo
+    @State private var loaded: NSImage?
+
+    private static let cache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 12
+        return cache
+    }()
+
+    var body: some View {
+        Group {
+            if let picture = loaded ?? NSImage(data: image.thumb) {
+                Image(nsImage: picture)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: 240, alignment: .topLeading)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .task(id: image.path) {
+            let key = image.path as NSString
+            if let cached = Self.cache.object(forKey: key) {
+                loaded = cached
+                return
+            }
+            let path = image.path
+            let picture = await Task.detached(priority: .userInitiated) { Images.preview(path: path, maxPixels: 1200) }.value
+            guard !Task.isCancelled, let picture else { return }
+            Self.cache.setObject(picture, forKey: key)
+            loaded = picture
         }
     }
 }
@@ -449,6 +700,110 @@ enum AppInfo {
 
 func linkURL(_ clip: Clip) -> URL? {
     URL(string: clip.text.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+/// What ⌘O opens: the link, or the image file in Preview.
+func openURL(_ clip: Clip) -> URL? {
+    switch clip.kind {
+    case .link: linkURL(clip)
+    case .image: clip.image.map { URL(fileURLWithPath: $0.path) }
+    case .text: nil
+    }
+}
+
+/// Lets a row be dragged into another app, and still clicked. SwiftUI's own
+/// drag writes types only SwiftUI reads; AppKit's writes what the Finder, Mail
+/// and browsers expect.
+struct DragSource: NSViewRepresentable {
+    let clip: Clip
+    let onClick: () -> Void
+    let onDoubleClick: () -> Void
+
+    func makeNSView(context: Context) -> DragView { DragView() }
+
+    func updateNSView(_ view: DragView, context: Context) {
+        view.clip = clip
+        view.onClick = onClick
+        view.onDoubleClick = onDoubleClick
+    }
+
+    final class DragView: NSView, NSDraggingSource {
+        var clip: Clip?
+        var onClick: (() -> Void)?
+        var onDoubleClick: (() -> Void)?
+        private var mouseDown: NSEvent?
+        private var dragging = false
+
+        // Otherwise a drag on a row moves the popup, which is movable by its background.
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        override func mouseDown(with event: NSEvent) {
+            mouseDown = event
+            dragging = false
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let mouseDown, !dragging, let clip,
+                hypot(event.locationInWindow.x - mouseDown.locationInWindow.x, event.locationInWindow.y - mouseDown.locationInWindow.y) > 4,
+                let writer = dragWriter(for: clip)
+            else { return }
+            dragging = true
+            let item = NSDraggingItem(pasteboardWriter: writer)
+            let image = dragImage(for: clip)
+            let origin = convert(mouseDown.locationInWindow, from: nil)
+            item.setDraggingFrame(
+                NSRect(
+                    x: origin.x - image.size.width / 2, y: origin.y - image.size.height / 2, width: image.size.width,
+                    height: image.size.height),
+                contents: image)
+            beginDraggingSession(with: [item], event: mouseDown, source: self)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            defer { mouseDown = nil }
+            guard !dragging else { return }
+            event.clickCount == 2 ? onDoubleClick?() : onClick?()
+        }
+
+        func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+            .copy
+        }
+
+    }
+}
+
+/// What a dragged clip carries: the text as text; an image as its file, plus PNG and TIFF for apps
+/// that take a picture rather than a file.
+func dragWriter(for clip: Clip) -> NSPasteboardWriting? {
+    guard let image = clip.image else { return clip.text as NSString }
+    let url = URL(fileURLWithPath: image.path)
+    guard let bytes = try? Data(contentsOf: url) else { return nil }
+    let item = Images.pasteboardItem(bytes: bytes, format: image.format, sourceApp: clip.sourceApp)
+    item.setString(url.absoluteString, forType: .fileURL)
+    return item
+}
+
+func dragImage(for clip: Clip) -> NSImage {
+    if let image = clip.image, let thumb = NSImage(data: image.thumb) {
+        let scale = min(1, 160 / max(thumb.size.width, 1), 100 / max(thumb.size.height, 1))
+        thumb.size = NSSize(width: thumb.size.width * scale, height: thumb.size.height * scale)
+        return thumb
+    }
+    let text = oneLine(clip.text).prefix(60) as NSString
+    let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor]
+    let size = text.size(withAttributes: attributes)
+    return NSImage(size: NSSize(width: size.width + 16, height: size.height + 8), flipped: false) { rect in
+        NSColor.windowBackgroundColor.withAlphaComponent(0.9).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+        text.draw(at: NSPoint(x: 8, y: 4), withAttributes: attributes)
+        return true
+    }
+}
+
+/// One line for the list: the text, or the text read in an image, or its size.
+private func rowLabel(_ clip: Clip) -> String {
+    if let image = clip.image, clip.text.isEmpty { return imageLabel(image) }
+    return oneLine(clip.text)
 }
 
 private func date(_ clip: Clip) -> Date {

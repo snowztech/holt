@@ -73,10 +73,11 @@ run: mac
 	-pkill -x Holt
 	open $(APP)
 
-test:
+test: core
 	cd core && cargo test
+	cd apple && swift test
 
-SWIFT_SOURCES := apple/Sources/Holt apple/ios/Sources apple/Package.swift
+SWIFT_SOURCES := apple/Sources/Holt apple/Tests apple/ios/Sources apple/Package.swift
 
 lint:
 	cd core && cargo fmt --check && cargo clippy --all-targets -- -D warnings

@@ -7,16 +7,18 @@ enum Prefs {
     static let historyDaysKey = "historyDays"
     static let ignoredAppsKey = "ignoredApps"
     static let showArrivalsKey = "showArrivals"
+    static let recordImagesKey = "recordImages"
     static let onboardedKey = "onboarded"
     static let appearanceKey = "appearance"
 
     private static var defaults: UserDefaults { .standard }
 
     static func registerDefaults() {
-        defaults.register(defaults: [historyDaysKey: 30, showArrivalsKey: true])
+        defaults.register(defaults: [historyDaysKey: 30, showArrivalsKey: true, recordImagesKey: true])
     }
 
     static var historyDays: Int { defaults.integer(forKey: historyDaysKey) }
+    static var recordImages: Bool { defaults.bool(forKey: recordImagesKey) }
 
     /// "system", "light" or "dark", applied to every Holt window.
     static func applyAppearance() {

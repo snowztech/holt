@@ -27,7 +27,8 @@
 ## What it does
 
 - **Find anything you copied.** Press ⇧⌘V and start typing. Every word has to match, so `ssh 10.0` finds that one command from last week.
-- **Paste where you were.** Pick a clip and press return. Holt pastes it into the app you were typing in.
+- **Paste where you were.** Pick a clip and press return. Holt pastes it into the app you were typing in. Or drag a clip out of the list into any field.
+- **Images too.** Screenshots and copied pictures, up to 10 MB each. The text in them is read on your Mac, so `invoice 2026` finds the screenshot of the invoice.
 - **Pin what you reuse.** Pinned clips stay at the top and never expire.
 - **On every Mac.** Pair your Macs once. Copy on one, press ⌘V on the other a second later.
 - **Private.** No account and no Holt server. Copies that password managers mark as private are never recorded.
@@ -75,7 +76,8 @@ On first launch, a short checklist walks you through setup:
 | ↩ | Paste the clip |
 | ⌘1 to ⌘9 | Paste one of the first nine. Hold ⌘ to see the numbers. |
 | ⌘P | Pin or unpin |
-| ⌘O | Open a link |
+| space | Show an image full size, in the popup or the menu bar menu |
+| ⌘O | Open a link, or an image in Preview |
 | ⌘⌫ | Delete, here and on your other Macs |
 | esc | Close |
 
@@ -95,7 +97,7 @@ Under the hood, the connection is [iroh](https://iroh.computer). The pairing cod
 
 ## Privacy
 
-- Your history stays on your Macs, in `~/Library/Application Support/Holt/holt.db`. There's no Holt account and no analytics.
+- Your history stays on your Macs, in `~/Library/Application Support/Holt/holt.db`, with images next to it in `images/`. There's no Holt account and no analytics. Text in images is read on your Mac with Apple's recognizer, never sent anywhere.
 - Copies that password managers mark as private are never recorded. In Settings → History you can add apps whose copies Holt ignores.
 - Sync is end-to-end encrypted, and only Macs you paired can connect.
 - To find each other across networks, your Macs use iroh's public discovery and relay servers. Those see your Macs' network addresses, never your clips.
@@ -124,7 +126,7 @@ Skip does the same with what you copy: keeps it safe, and skips it across to you
 - [x] Sync between Macs
 - [x] Signed download and Homebrew
 - [ ] iPhone app
-- [ ] Images, and search for the text inside screenshots
+- [x] Images, and search for the text inside screenshots
 - [ ] Windows and Linux
 
 ## Contributing
