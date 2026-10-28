@@ -345,7 +345,7 @@ struct PopupView: View {
                     list
                     Divider()
                     if let clip = model.selected {
-                        ClipPreview(clip: clip).frame(width: 300)
+                        ClipPreview(clip: clip, query: model.query).frame(width: 300)
                     }
                 }
             }
@@ -449,6 +449,7 @@ private struct ClipRow: View {
 
 private struct ClipPreview: View {
     let clip: Clip
+    let query: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -458,23 +459,25 @@ private struct ClipPreview: View {
             }
 
             if let image = clip.image {
-                ImagePreview(image: image)
+                // Takes the room the text below doesn't need.
+                ImagePreview(image: image).layoutPriority(1)
                 Text("\(dimensions(image)) · \(image.format.uppercased()) · \(fileSize(image.bytes))")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
-                if !clip.text.isEmpty {
-                    // The first lines only, and not selectable: laying out a screenshot's
-                    // worth of recognized text costs hundreds of milliseconds per keypress.
-                    // The whole text is still what search matches.
-                    Text(recognizedExcerpt)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Spacer(minLength: 0)
-                } else {
-                    Spacer(minLength: 0)
+                // The recognized text shows why a search matched. Browsing, the picture says enough.
+                if let excerpt = recognizedExcerpt {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Text in image").font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary)
+                        // A few lines, not selectable: laying out a screenshot's worth of
+                        // recognized text costs hundreds of milliseconds per keypress.
+                        Text(highlight(excerpt, query))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                Spacer(minLength: 0)
             } else if clip.kind == .link {
                 linkCard
                 Spacer(minLength: 0)
@@ -500,10 +503,14 @@ private struct ClipPreview: View {
 
     private var lineCount: Int { clip.text.split(whereSeparator: \.isNewline).count }
 
-    private var recognizedExcerpt: String {
+    /// While searching, the lines that match first.
+    private var recognizedExcerpt: String? {
+        let words = query.lowercased().split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty, !clip.text.isEmpty else { return nil }
         let lines = clip.text.split(whereSeparator: \.isNewline)
-        let excerpt = lines.prefix(12).map { String($0.prefix(120)) }.joined(separator: "\n")
-        return lines.count > 12 ? excerpt + "\n…" : excerpt
+        let matching = lines.filter { line in words.contains { line.lowercased().contains($0) } }
+        let shown = (matching.isEmpty ? lines : matching).prefix(6)
+        return shown.map { String($0.prefix(120)) }.joined(separator: "\n")
     }
     private var isShort: Bool { lineCount <= 1 && clip.text.count <= 90 }
 
@@ -650,10 +657,10 @@ private struct ImagePreview: View {
                 Image(nsImage: picture)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: 240, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(maxWidth: .infinity)
         .task(id: image.path) {
             let key = image.path as NSString
             if let cached = Self.cache.object(forKey: key) {
