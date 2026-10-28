@@ -66,6 +66,9 @@ jobs:
           SPARKLE_KEY_FILE="$RUNNER_TEMP/sparkle.key" ./scripts/appcast.sh "$version" build/Holt-"$version".zip > build/appcast.xml
           rm "$RUNNER_TEMP/sparkle.key"
 
+      - name: Build the Alfred workflow
+        run: make alfred
+
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,7 +80,7 @@ jobs:
           # Fixed names keep releases/latest/download/Holt.dmg working as a direct link.
           cp build/Holt-"$version".dmg build/Holt.dmg
           cp build/Holt-"$version".zip build/Holt.zip
-          gh release create "$GITHUB_REF_NAME" build/Holt.dmg build/Holt.zip build/appcast.xml \
+          gh release create "$GITHUB_REF_NAME" build/Holt.dmg build/Holt.zip build/appcast.xml build/Holt.alfredworkflow \
             --title "Holt $version" --notes-file "$RUNNER_TEMP/notes.md" $prerelease
 
   # A job of its own, so a failed bump can be re-run without publishing the release again.
