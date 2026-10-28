@@ -21,6 +21,8 @@ final class PopupModel: ObservableObject {
     @Published var commandHeld = false
     /// Bumped on every show so the view can refocus the search field.
     @Published private(set) var shown = 0
+    /// ⌘I: where the selected clip was copied and how it got here. Stays on until ⌘I again.
+    @Published var showInfo = false
 
     private let store: Store
     private let syncStatus: () -> SyncStatus?
@@ -58,6 +60,10 @@ final class PopupModel: ObservableObject {
         guard let clip = selected else { return }
         try? store.setPinned(id: clip.id, pinned: !clip.pinned)
         refresh()
+    }
+
+    func arrivals(_ clip: Clip) -> [Arrival] {
+        (try? store.arrivals(id: clip.id)) ?? []
     }
 
     func deleteSelected() {
@@ -226,6 +232,8 @@ final class PopupController {
             guard command, let key = event.charactersIgnoringModifiers else { return event }
             if key == "p" {
                 model.togglePin()
+            } else if key == "i" {
+                model.showInfo.toggle()
             } else if key == "o", let clip = model.selected, let url = openURL(clip) {
                 close()
                 NSWorkspace.shared.open(url)
@@ -345,7 +353,8 @@ struct PopupView: View {
                     list
                     Divider()
                     if let clip = model.selected {
-                        ClipPreview(clip: clip, query: model.query).frame(width: 300)
+                        ClipPreview(clip: clip, query: model.query, info: model.showInfo ? model.arrivals(clip) : nil)
+                            .frame(width: 300)
                     }
                 }
             }
@@ -450,6 +459,8 @@ private struct ClipRow: View {
 private struct ClipPreview: View {
     let clip: Clip
     let query: String
+    /// How the clip got here, when ⌘I is on.
+    let info: [Arrival]?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -495,6 +506,9 @@ private struct ClipPreview: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Text(size).font(.system(size: 11)).foregroundStyle(.tertiary)
+            }
+            if let info {
+                ClipInfo(clip: clip, arrivals: info)
             }
         }
         .padding(18)
@@ -618,6 +632,92 @@ struct SourceIcon: View {
         case .image: "photo"
         case .text: "text.alignleft"
         }
+    }
+}
+
+/// ⌘I: where a clip was copied, and each time it reached this Mac from a paired
+/// device, directly or through a relay. For telling Universal Clipboard from Holt
+/// sync, and for seeing why a sync was slow.
+private struct ClipInfo: View {
+    let clip: Clip
+    let arrivals: [Arrival]
+
+    var body: some View {
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 5) {
+            GridRow {
+                label("Copied")
+                Text(copied)
+            }
+            ForEach(Array(arrivals.enumerated()), id: \.offset) { index, arrival in
+                GridRow {
+                    label(index == 0 ? "Arrived" : "")
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(route(arrival))
+                        Text(timing(arrival)).foregroundStyle(.tertiary)
+                    }
+                    .help(explain(arrival.path))
+                }
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .textSelection(.enabled)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text).foregroundStyle(.tertiary).gridColumnAlignment(.trailing)
+    }
+
+    private var copied: String {
+        let when = exactTime(date(clip))
+        if clip.sourceApp == ClipboardWatcher.universalClipboard { return "\(when), through Universal Clipboard" }
+        let app = AppInfo.name(clip.sourceApp).map { " in \($0)" } ?? ""
+        return "\(when) on \(clip.device ?? "this Mac")\(app)"
+    }
+
+    private func route(_ arrival: Arrival) -> String {
+        switch arrival.path {
+        case .direct: "\(arrival.from) · direct"
+        case .relay: "\(arrival.from) · via relay"
+        case nil: arrival.from
+        }
+    }
+
+    private func explain(_ path: ArrivalPath?) -> String {
+        switch path {
+        case .direct: "Sent straight to this Mac, with no server in between. The address shows if it was this network or the internet."
+        case .relay:
+            "The devices couldn't reach each other, so a relay server passed the clip along, encrypted. It can't read it. A router or firewall is usually in the way."
+        case nil: "Synced by Holt."
+        }
+    }
+
+    private func timing(_ arrival: Arrival) -> String {
+        let arrived = Date(timeIntervalSince1970: TimeInterval(arrival.arrivedAt) / 1000)
+        return [exactTime(arrived), delay(arrival.arrivedAt - arrival.copiedAt), arrival.address]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
+    /// How long after the copy it got here. Clocks differ a little between devices,
+    /// so a negative gap says nothing.
+    private func delay(_ ms: Int64) -> String? {
+        guard ms >= 0 else { return nil }
+        if ms < 10_000 { return "\((Double(ms) / 1000).formatted(.number.precision(.fractionLength(1)))) s later" }
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.maximumUnitCount = 1
+        return formatter.string(from: TimeInterval(ms / 1000)).map { "\($0) later" }
+    }
+
+    private func exactTime(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? date.formatted(.dateTime.hour().minute().second())
+            : date.formatted(.dateTime.day().month(.abbreviated).hour().minute().second())
     }
 }
 

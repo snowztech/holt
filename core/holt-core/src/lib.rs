@@ -77,6 +77,53 @@ pub struct IncomingCopy {
     pub image_format: Option<String>,
 }
 
+/// The network path a synced clip took to reach this device: straight from
+/// the other device, or forwarded by a relay server because they couldn't
+/// reach each other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ArrivalPath {
+    Direct,
+    Relay,
+}
+
+impl ArrivalPath {
+    fn as_str(self) -> &'static str {
+        match self {
+            ArrivalPath::Direct => "direct",
+            ArrivalPath::Relay => "relay",
+        }
+    }
+
+    fn parse(stored: &str) -> Option<Self> {
+        [Self::Direct, Self::Relay]
+            .into_iter()
+            .find(|p| p.as_str() == stored)
+    }
+}
+
+/// One delivery of a clip from a paired device. Kept on this device only, to
+/// show how a clip got here.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct Arrival {
+    /// The device that sent it. It may be passing on another device's copy.
+    pub from: String,
+    pub path: Option<ArrivalPath>,
+    /// The relay server's host, or the other device's IP address on a direct path.
+    pub address: Option<String>,
+    /// Unix time in milliseconds it was copied, on the copying device's clock.
+    pub copied_at: i64,
+    /// Unix time in milliseconds it got here.
+    pub arrived_at: i64,
+}
+
+/// Who a batch of rows came from, and over which path.
+#[derive(Debug, Clone)]
+pub(crate) struct Delivery {
+    pub peer: String,
+    pub path: Option<ArrivalPath>,
+    pub address: Option<String>,
+}
+
 #[derive(Debug, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum HoltError {
@@ -362,9 +409,39 @@ impl Store {
              )",
             params![max_unpinned],
         )?;
+        conn.execute(
+            "DELETE FROM arrivals WHERE key NOT IN (SELECT key FROM clips WHERE deleted = 0)",
+            [],
+        )?;
         drop(conn);
         self.sweep_images()?;
         Ok((old + extra) as u32)
+    }
+
+    /// How a clip reached this device from paired devices, the last five in the
+    /// order they came. Empty for a clip copied here.
+    pub fn arrivals(&self, id: i64) -> Result<Vec<Arrival>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT coalesce(p.name, a.peer), a.path, a.address, a.copied_at, a.at
+             FROM arrivals a JOIN clips c ON c.key = a.key LEFT JOIN peers p ON p.id = a.peer
+             WHERE c.id = ?1 ORDER BY a.at DESC LIMIT 5",
+        )?;
+        let rows = stmt.query_map(params![id], |r| {
+            Ok(Arrival {
+                from: r.get(0)?,
+                path: r
+                    .get::<_, Option<String>>(1)?
+                    .as_deref()
+                    .and_then(ArrivalPath::parse),
+                address: r.get(2)?,
+                copied_at: r.get(3)?,
+                arrived_at: r.get(4)?,
+            })
+        })?;
+        let mut arrivals: Vec<Arrival> = rows.collect::<std::result::Result<_, _>>()?;
+        arrivals.reverse();
+        Ok(arrivals)
     }
 
     /// The newest clip that just arrived from another device, if there is one
@@ -566,7 +643,7 @@ impl Store {
     /// Merges rows from a peer. For each clip the version with the newest
     /// `updated_at` wins, with the origin id breaking ties so every device
     /// picks the same one.
-    pub(crate) fn apply(&self, rows: Vec<Row>) -> Result<()> {
+    pub(crate) fn apply(&self, rows: Vec<Row>, delivery: Option<&Delivery>) -> Result<()> {
         let now = now_ms();
         let mut changed = false;
         let mut live_copy: Option<(i64, IncomingCopy)> = None;
@@ -616,6 +693,22 @@ impl Store {
                     }
                     None
                 };
+                // Noted even when this device's own version wins below: a copy that
+                // came through Universal Clipboard first still shows it arrived here too.
+                if let (Some(d), false) = (delivery, row.deleted) {
+                    tx.execute(
+                        "INSERT OR IGNORE INTO arrivals (key, copied_at, peer, path, address, at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                        params![
+                            row.key,
+                            row.created_at,
+                            d.peer,
+                            d.path.map(ArrivalPath::as_str),
+                            d.address,
+                            now
+                        ],
+                    )?;
+                }
                 let current: Option<(i64, String)> = tx
                     .query_row(
                         "SELECT updated_at, origin FROM clips WHERE key = ?1",
@@ -831,6 +924,22 @@ fn migrate(conn: &mut Connection) -> Result<[u8; 32]> {
              PRAGMA user_version = 3;",
         )?;
     }
+    if version < 4 {
+        // How synced clips got here. Never synced itself: each device keeps its own.
+        // One row per copy and sender, so a pin or a second batch doesn't add another.
+        tx.execute_batch(
+            "CREATE TABLE arrivals (
+                 key TEXT NOT NULL,
+                 copied_at INTEGER NOT NULL,
+                 peer TEXT NOT NULL,
+                 path TEXT,
+                 address TEXT,
+                 at INTEGER NOT NULL,
+                 PRIMARY KEY (key, copied_at, peer)
+             ) WITHOUT ROWID;
+             PRAGMA user_version = 4;",
+        )?;
+    }
     let hex: String = tx.query_row("SELECT value FROM meta WHERE key = 'secret_key'", [], |r| {
         r.get(0)
     })?;
@@ -917,7 +1026,7 @@ mod tests {
         let cursors = to.cursors().unwrap();
         for origin in from.origins().unwrap() {
             let after = cursors.get(&origin).copied().unwrap_or(0);
-            to.apply(from.rows_since(&origin, after, 1000).unwrap())
+            to.apply(from.rows_since(&origin, after, 1000).unwrap(), None)
                 .unwrap();
         }
     }
@@ -1098,7 +1207,7 @@ mod tests {
         a.add("real".into(), None).unwrap();
         let mut rows = a.rows_since(&a.device_id(), 0, 10).unwrap();
         rows[0].text = Some("forged".into());
-        b.apply(rows).unwrap();
+        b.apply(rows, None).unwrap();
         assert!(all(&b).is_empty());
     }
 
@@ -1116,6 +1225,96 @@ mod tests {
         )
         .unwrap()
         .unwrap()
+    }
+
+    /// Like `sync`, as if `from` sent the rows over `path`.
+    fn sync_via(from: &Store, to: &Store, path: ArrivalPath) {
+        let delivery = Delivery {
+            peer: from.device_id(),
+            path: Some(path),
+            address: (path == ArrivalPath::Relay).then(|| "euw1-1.relay.n0.iroh.link".into()),
+        };
+        let cursors = to.cursors().unwrap();
+        for origin in from.origins().unwrap() {
+            let after = cursors.get(&origin).copied().unwrap_or(0);
+            to.apply(
+                from.rows_since(&origin, after, 1000).unwrap(),
+                Some(&delivery),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn arrivals_say_who_sent_a_copy_and_how() {
+        let (a, b) = (store(), store());
+        b.add_peer(&a.device_id(), "MacBook Pro").unwrap();
+        let on_a = a.add("hello".into(), None).unwrap().unwrap();
+        sync_via(&a, &b, ArrivalPath::Relay);
+
+        let on_b = b.search("".into(), 10).unwrap().remove(0);
+        let arrivals = b.arrivals(on_b.id).unwrap();
+        assert_eq!(arrivals.len(), 1);
+        assert_eq!(arrivals[0].from, "MacBook Pro");
+        assert_eq!(arrivals[0].path, Some(ArrivalPath::Relay));
+        assert_eq!(
+            arrivals[0].address.as_deref(),
+            Some("euw1-1.relay.n0.iroh.link")
+        );
+        assert_eq!(arrivals[0].copied_at, on_a.created_at);
+        assert!(arrivals[0].arrived_at >= on_a.created_at);
+        assert!(a.arrivals(on_a.id).unwrap().is_empty());
+
+        // A pin is the same copy, so it adds nothing. Copying it again does.
+        a.set_pinned(on_a.id, true).unwrap();
+        sync_via(&a, &b, ArrivalPath::Relay);
+        assert_eq!(b.arrivals(on_b.id).unwrap().len(), 1);
+        tick();
+        a.add("hello".into(), None).unwrap();
+        sync_via(&a, &b, ArrivalPath::Direct);
+        let arrivals = b.arrivals(on_b.id).unwrap();
+        assert_eq!(arrivals.len(), 2);
+        assert_eq!(arrivals[1].path, Some(ArrivalPath::Direct));
+    }
+
+    #[test]
+    fn a_copy_already_here_still_notes_that_it_arrived() {
+        // Universal Clipboard can put a copy on this Mac before Holt sync brings it.
+        let (a, b) = (store(), store());
+        a.add("from the phone".into(), None).unwrap();
+        tick();
+        let here = b
+            .add(
+                "from the phone".into(),
+                Some("com.apple.is-remote-clipboard".into()),
+            )
+            .unwrap()
+            .unwrap();
+        sync_via(&a, &b, ArrivalPath::Relay);
+
+        let clips = b.search("".into(), 10).unwrap();
+        assert_eq!(clips.len(), 1);
+        assert_eq!(clips[0].source_app, here.source_app);
+        let arrivals = b.arrivals(here.id).unwrap();
+        assert_eq!(arrivals.len(), 1);
+        assert_eq!(arrivals[0].from, a.device_id());
+    }
+
+    #[test]
+    fn pruning_forgets_arrivals_of_deleted_clips() {
+        let (a, b) = (store(), store());
+        a.add("gone soon".into(), None).unwrap();
+        sync_via(&a, &b, ArrivalPath::Direct);
+        let id = b.search("".into(), 10).unwrap()[0].id;
+        b.delete(id).unwrap();
+        b.prune(30, 5000).unwrap();
+        let left: i64 = b
+            .conn
+            .lock()
+            .unwrap()
+            .query_row("SELECT count(*) FROM arrivals", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
     }
 
     #[test]
@@ -1248,7 +1447,7 @@ mod tests {
             &base64::engine::general_purpose::STANDARD,
             b"forged",
         ));
-        b.apply(rows).unwrap();
+        b.apply(rows, None).unwrap();
         assert!(all(&b).is_empty());
     }
 
@@ -1286,7 +1485,7 @@ mod tests {
         std::fs::write(&outside, b"x").unwrap();
         let mut rows = a.rows_since(&a.device_id(), 0, 10).unwrap();
         rows[0].key = format!("../{}", outside.file_stem().unwrap().to_str().unwrap());
-        b.apply(rows).unwrap();
+        b.apply(rows, None).unwrap();
         assert!(outside.exists());
         std::fs::remove_file(outside).unwrap();
     }

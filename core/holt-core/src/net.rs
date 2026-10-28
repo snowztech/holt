@@ -16,14 +16,14 @@ use std::time::Duration;
 use iroh::address_lookup::{MemoryLookup, UserData};
 use iroh::endpoint::{presets, Connection, RecvStream, SendStream};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
-use iroh::{Endpoint, EndpointId, RelayMode, SecretKey};
+use iroh::{Endpoint, EndpointId, RelayMode, SecretKey, TransportAddr};
 use iroh_mdns_address_lookup::{DiscoveryEvent, MdnsAddressLookup};
 use n0_future::StreamExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use spake2::{Ed25519Group, Identity, Password, Spake2};
 use tokio::task::JoinHandle;
 
-use crate::{HoltError, Result, Row, Store};
+use crate::{ArrivalPath, Delivery, HoltError, Result, Row, Store};
 
 const SYNC_ALPN: &[u8] = b"holt/sync/1";
 const PAIR_ALPN: &[u8] = b"holt/pair/1";
@@ -346,7 +346,7 @@ async fn sync_session(inner: Arc<Inner>, conn: Connection, dialer: bool) -> NetR
     inner.set_online(peer, 1);
     let result = tokio::select! {
         r = send_changes(&inner, &mut send, &theirs, &peer_id) => r,
-        r = receive_changes(&inner, &mut recv, &theirs) => r,
+        r = receive_changes(&inner, &mut recv, &theirs, &conn, &peer_id) => r,
     };
     inner.set_online(peer, -1);
     result
@@ -392,6 +392,8 @@ async fn receive_changes(
     inner: &Inner,
     recv: &mut RecvStream,
     theirs: &Mutex<HashMap<String, i64>>,
+    conn: &Connection,
+    peer_id: &str,
 ) -> NetResult<()> {
     loop {
         if let SyncMsg::Rows(rows) = read_msg(recv).await? {
@@ -403,8 +405,31 @@ async fn receive_changes(
                     *seen = (*seen).max(row.seq);
                 }
             }
-            inner.store.apply(rows)?;
+            inner.store.apply(rows, Some(&delivery(conn, peer_id)))?;
         }
+    }
+}
+
+/// The path the connection is using right now, so each clip can say how it got here.
+fn delivery(conn: &Connection, peer_id: &str) -> Delivery {
+    let paths = conn.paths();
+    let selected = paths
+        .iter()
+        .find(|p| p.is_selected())
+        .map(|p| p.remote_addr().clone());
+    let (path, address) = match selected {
+        Some(TransportAddr::Relay(url)) => {
+            (Some(ArrivalPath::Relay), url.host_str().map(String::from))
+        }
+        // The address says whether it was this network or the internet. Holt doesn't
+        // guess: a public IPv6 address is often on the same Wi-Fi.
+        Some(TransportAddr::Ip(addr)) => (Some(ArrivalPath::Direct), Some(addr.ip().to_string())),
+        _ => (None, None),
+    };
+    Delivery {
+        peer: peer_id.into(),
+        path,
+        address,
     }
 }
 
@@ -699,6 +724,13 @@ mod tests {
             (incoming.text.as_str(), incoming.device.as_str()),
             ("from a", "Mac A")
         );
+        // Both nodes are on this machine with no relay, so the clip came directly.
+        let id = b.inner.store.search("from a".into(), 1).unwrap()[0].id;
+        let arrivals = b.inner.store.arrivals(id).unwrap();
+        assert_eq!(arrivals.len(), 1);
+        assert_eq!(arrivals[0].from, "Mac A");
+        assert_eq!(arrivals[0].path, Some(ArrivalPath::Direct));
+        assert!(arrivals[0].address.is_some());
 
         b.inner.store.add("from b".into(), None).unwrap();
         wait_until("a to get b's clip", || texts(&a) == ["from b", "from a"]);
