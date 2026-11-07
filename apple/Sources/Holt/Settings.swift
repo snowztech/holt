@@ -137,6 +137,9 @@ private struct GeneralTab: View {
     @ObservedObject var model: SettingsModel
     @AppStorage(Prefs.showArrivalsKey) private var showArrivals = true
     @AppStorage(Prefs.appearanceKey) private var appearance = "system"
+    @AppStorage(Prefs.clickToCopyKey) private var clickToCopy = false
+    @AppStorage(Prefs.popupWidthKey) private var popupWidth = Double(Prefs.defaultPopupSize.width)
+    @AppStorage(Prefs.popupHeightKey) private var popupHeight = Double(Prefs.defaultPopupSize.height)
 
     var body: some View {
         Form {
@@ -152,6 +155,29 @@ private struct GeneralTab: View {
                 }
                 Toggle("Open Holt at login", isOn: $model.launchAtLogin)
                 Toggle("Show clips arriving from other devices", isOn: $showArrivals)
+            }
+            Section {
+                Picker("Single click on a clip", selection: $clickToCopy) {
+                    Text("Selects it").tag(false)
+                    Text("Copies it to the clipboard").tag(true)
+                }
+                LabeledContent("Popup size") {
+                    HStack(spacing: 8) {
+                        Text("\(Int(popupWidth)) × \(Int(popupHeight))")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        if popupWidth != Double(Prefs.defaultPopupSize.width) || popupHeight != Double(Prefs.defaultPopupSize.height) {
+                            Button("Reset") {
+                                popupWidth = Double(Prefs.defaultPopupSize.width)
+                                popupHeight = Double(Prefs.defaultPopupSize.height)
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("A double click always pastes in the app you were using. Drag an edge or a corner of the popup to resize it.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             Section("Permissions") {
                 PermissionRow(
@@ -171,7 +197,7 @@ private struct GeneralTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 368)
+        .frame(height: 490)
     }
 }
 

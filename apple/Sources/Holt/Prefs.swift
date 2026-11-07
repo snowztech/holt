@@ -10,15 +10,27 @@ enum Prefs {
     static let recordImagesKey = "recordImages"
     static let onboardedKey = "onboarded"
     static let appearanceKey = "appearance"
+    static let clickToCopyKey = "clickToCopy"
+    static let popupWidthKey = "popupWidth"
+    static let popupHeightKey = "popupHeight"
+
+    static let defaultPopupSize = NSSize(width: 760, height: 460)
+    /// The smallest popup that still fits the list, the preview and the action bar.
+    static let minPopupSize = NSSize(width: 620, height: 320)
 
     private static var defaults: UserDefaults { .standard }
 
     static func registerDefaults() {
-        defaults.register(defaults: [historyDaysKey: 30, showArrivalsKey: true, recordImagesKey: true])
+        defaults.register(defaults: [
+            historyDaysKey: 30, showArrivalsKey: true, recordImagesKey: true, clickToCopyKey: false,
+            popupWidthKey: Double(defaultPopupSize.width), popupHeightKey: Double(defaultPopupSize.height),
+        ])
     }
 
     static var historyDays: Int { defaults.integer(forKey: historyDaysKey) }
     static var recordImages: Bool { defaults.bool(forKey: recordImagesKey) }
+    /// A single click in the popup copies the clip instead of only selecting it.
+    static var clickToCopy: Bool { defaults.bool(forKey: clickToCopyKey) }
 
     /// "system", "light" or "dark", applied to every Holt window.
     static func applyAppearance() {
@@ -29,6 +41,15 @@ enum Prefs {
         }
     }
     static var showArrivals: Bool { defaults.bool(forKey: showArrivalsKey) }
+
+    /// The size the user last dragged the popup to.
+    static var popupSize: NSSize {
+        get { NSSize(width: defaults.double(forKey: popupWidthKey), height: defaults.double(forKey: popupHeightKey)) }
+        set {
+            defaults.set(Double(newValue.width), forKey: popupWidthKey)
+            defaults.set(Double(newValue.height), forKey: popupHeightKey)
+        }
+    }
 
     static var onboarded: Bool {
         get { defaults.bool(forKey: onboardedKey) }

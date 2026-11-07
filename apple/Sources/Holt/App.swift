@@ -92,9 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         watcher.start()
 
-        popup = PopupController(store: store, syncStatus: { [weak self] in self?.syncStatus() }) { [weak self] clip in
-            self?.paste(clip)
-        }
+        popup = PopupController(
+            store: store, syncStatus: { [weak self] in self?.syncStatus() },
+            onPick: { [weak self] in self?.paste($0) },
+            onCopy: { [weak self] in self?.copy($0) })
         popup.onSettings = { [weak self] in self?.settings.show() }
         hotKey = HotKey(Prefs.shortcut) { [weak self] in self?.popup.toggle() }
 

@@ -235,15 +235,25 @@ final class DragRoutingTests: XCTestCase {
 }
 
 final class PopupDragRoutingTests: XCTestCase {
+    private var picked: Clip?
+    private var copied: [Clip] = []
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: Prefs.clickToCopyKey)
+        super.tearDown()
+    }
+
     /// Same view tree as the real popup: scroll view, lazy stack, rows.
     @MainActor
-    func testDoubleClickOnARowInTheRealPopupPicksIt() throws {
+    private func makePopup() throws -> (PopupModel, PopupPanel, NSHostingView<PopupView>, [DragSource.DragView]) {
         let store = try Store.open(path: ":memory:")
         _ = try store.add(text: "first", sourceApp: nil)
         _ = try store.add(text: "second", sourceApp: nil)
         let model = PopupModel(store: store, syncStatus: { nil })
-        var picked: Clip?
-        let host = NSHostingView(rootView: PopupView(model: model, onPick: { picked = $0 }, canPreview: { false }))
+        let host = NSHostingView(
+            rootView: PopupView(
+                model: model, onPick: { [weak self] in self?.picked = $0 }, onCopy: { [weak self] in self?.copied.append($0) },
+                canPreview: { false }))
         let panel = PopupPanel(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 460), styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered, defer: false)
@@ -252,22 +262,69 @@ final class PopupDragRoutingTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         RunLoop.main.run(until: Date().addingTimeInterval(0.2))
         host.layoutSubtreeIfNeeded()
+        let rows = descendants(of: host).compactMap { $0 as? DragSource.DragView }
+        XCTAssertEqual(rows.count, 2, "rows: \(rows.count)")
+        return (model, panel, host, rows)
+    }
 
-        let dragViews = descendants(of: host).compactMap { $0 as? DragSource.DragView }
-        XCTAssertEqual(dragViews.count, 2, "rows: \(dragViews.count)")
-        let row = try XCTUnwrap(dragViews.last)
+    @MainActor
+    private func click(_ row: DragSource.DragView, in panel: PopupPanel, count: Int) {
         let center = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
-        // SwiftUI's scroll view answers hit tests itself; the panel routes around it.
-        XCTAssertFalse(host.hitTest(host.convert(center, from: nil)) is DragSource.DragView)
-
-        for (type, count) in [(NSEvent.EventType.leftMouseDown, 2), (.leftMouseUp, 2)] {
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = NSEvent.mouseEvent(
                 with: type, location: center, modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber, context: nil,
                 eventNumber: 0, clickCount: count, pressure: 1)!
             panel.sendEvent(event)
         }
-        let frames = dragViews.map { "\($0.clip?.text ?? "-")@\($0.convert($0.bounds, to: nil)) visible=\($0.visibleRect)" }
-        XCTAssertEqual(picked?.text, row.clip?.text, "double-click should pick the row; center=\(center) rows=\(frames)")
+    }
+
+    @MainActor
+    func testDoubleClickOnARowInTheRealPopupPicksIt() throws {
+        let (_, panel, host, rows) = try makePopup()
+        let row = try XCTUnwrap(rows.last)
+        let center = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
+        // SwiftUI's scroll view answers hit tests itself; the panel routes around it.
+        XCTAssertFalse(host.hitTest(host.convert(center, from: nil)) is DragSource.DragView)
+
+        click(row, in: panel, count: 2)
+        XCTAssertEqual(picked?.text, row.clip?.text, "double-click should pick the row")
+    }
+
+    @MainActor
+    func testSingleClickSelectsWithoutCopyingByDefault() throws {
+        let (model, panel, _, rows) = try makePopup()
+        let row = try XCTUnwrap(rows.last)
+        click(row, in: panel, count: 1)
+        XCTAssertEqual(model.selected?.text, row.clip?.text)
+        XCTAssertTrue(copied.isEmpty)
+        XCTAssertNil(picked)
+    }
+
+    @MainActor
+    func testSingleClickCopiesWhenTheSettingIsOn() throws {
+        UserDefaults.standard.set(true, forKey: Prefs.clickToCopyKey)
+        let (model, panel, _, rows) = try makePopup()
+        let row = try XCTUnwrap(rows.last)
+        click(row, in: panel, count: 1)
+        XCTAssertEqual(copied.map(\.text), [row.clip?.text].compactMap { $0 })
+        XCTAssertEqual(model.copiedID, row.clip?.id)
+        XCTAssertNil(picked, "a single click copies, it doesn't paste")
+    }
+
+    @MainActor
+    func testHoverSelectsTheRowOnceThePointerMoved() throws {
+        let (model, panel, _, rows) = try makePopup()
+        let row = try XCTUnwrap(rows.last)
+        XCTAssertEqual(model.selection, 0)
+
+        // Still pointer right after opening: the first clip stays selected.
+        panel.pointerAtOpen = NSEvent.mouseLocation
+        row.setHovered(true)
+        XCTAssertEqual(model.selection, 0)
+
+        panel.pointerAtOpen = nil
+        row.setHovered(true)
+        XCTAssertEqual(model.selected?.text, row.clip?.text, "the preview follows the hovered row")
     }
 
     private func descendants(of view: NSView) -> [NSView] {

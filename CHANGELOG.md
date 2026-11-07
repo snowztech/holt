@@ -4,6 +4,15 @@ Notable changes to Holt. The format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+### Added
+
+- Drag an edge or a corner of the popup to resize it, to see more clips at once. Holt keeps the size, and Settings → General shows it with a Reset button.
+- Settings → General → Single click on a clip: keep selecting it, or copy it to the clipboard. A double click still pastes.
+
+### Changed
+
+- Hovering a row in the popup lifts it and selects it, so the preview follows the pointer.
+
 ## [0.1.7] - 2026-10-28
 
 The ⌘I panel in plain words.

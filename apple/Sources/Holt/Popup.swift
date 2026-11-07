@@ -14,11 +14,15 @@ final class PopupModel: ObservableObject {
     @Published var query = "" { didSet { selection = 0; refresh() } }
     @Published private(set) var clips: [Clip] = []
     @Published var selection = 0
+    /// Set when the pointer picked the row: it's already on screen, so the list doesn't scroll.
+    var selectedByPointer = false
     /// The app that will receive the paste, shown in the action bar.
     @Published private(set) var targetApp: String?
     @Published private(set) var sync: SyncStatus?
     /// ⌘1 to ⌘9 hints show only while ⌘ is held.
     @Published var commandHeld = false
+    /// The clip a single click just copied, marked for a moment in the list.
+    @Published private(set) var copiedID: Int64?
     /// Bumped on every show so the view can refocus the search field.
     @Published private(set) var shown = 0
     /// ⌘I: where the selected clip was copied and how it got here. Stays on until ⌘I again.
@@ -51,6 +55,20 @@ final class PopupModel: ObservableObject {
         selection = min(selection, max(clips.count - 1, 0))
     }
 
+    func markCopied(_ clip: Clip) {
+        let id = clip.id
+        copiedID = id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            if self?.copiedID == id { self?.copiedID = nil }
+        }
+    }
+
+    func point(at index: Int) {
+        guard index != selection, clips.indices.contains(index) else { return }
+        selectedByPointer = true
+        selection = index
+    }
+
     func move(_ delta: Int) {
         guard !clips.isEmpty else { return }
         selection = min(max(selection + delta, 0), clips.count - 1)
@@ -79,6 +97,16 @@ final class PopupPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 
     private var pressedRow: DragSource.DragView?
+    /// Where the pointer was when the popup opened. A row under a still pointer
+    /// doesn't take the selection, or ↩ would paste something else than the first clip.
+    var pointerAtOpen: NSPoint?
+
+    var pointerHasMoved: Bool {
+        guard let pointerAtOpen else { return true }
+        if NSEvent.mouseLocation == pointerAtOpen { return false }
+        self.pointerAtOpen = nil
+        return true
+    }
 
     /// SwiftUI's scroll view keeps every click for itself, so AppKit views in
     /// the rows never see one. Mouse events are handed to the row under the
@@ -102,10 +130,29 @@ final class PopupPanel: NSPanel {
                 pressedRow.mouseUp(with: event)
                 return
             }
+        case .scrollWheel:
+            // Rows that scroll under a still pointer get no enter or exit. Checked
+            // once the scroll view has moved them.
+            super.sendEvent(event)
+            DispatchQueue.main.async { [weak self] in self?.refreshHover() }
+            return
         default:
             break
         }
         super.sendEvent(event)
+    }
+
+    /// Highlights the row under the pointer, if any.
+    func refreshHover() {
+        guard let contentView else { return }
+        rows(in: contentView).forEach { $0.refreshHover() }
+    }
+
+    /// The keyboard took over, or the popup closed: no row stays highlighted
+    /// until the pointer moves again.
+    func clearHover() {
+        guard let contentView else { return }
+        rows(in: contentView).forEach { $0.setHovered(false) }
     }
 
     private func row(at point: NSPoint) -> DragSource.DragView? {
@@ -125,17 +172,21 @@ final class PopupController {
     private let panel: PopupPanel
     private let model: PopupModel
     private let onPick: (Clip) -> Void
+    private let onCopy: (Clip) -> Void
     /// ⌘, opens Settings. The popup never activates Holt, so the app menu's own ⌘, never fires here.
     var onSettings: (() -> Void)?
     private let lightbox = Lightbox()
     private var keyMonitor: Any?
 
-    init(store: Store, syncStatus: @escaping () -> SyncStatus?, onPick: @escaping (Clip) -> Void) {
+    init(
+        store: Store, syncStatus: @escaping () -> SyncStatus?, onPick: @escaping (Clip) -> Void, onCopy: @escaping (Clip) -> Void
+    ) {
         self.onPick = onPick
+        self.onCopy = onCopy
         model = PopupModel(store: store, syncStatus: syncStatus)
         panel = PopupPanel(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 460),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -145,6 +196,8 @@ final class PopupController {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
+        // Drag an edge to resize; the size is kept for next time.
+        panel.contentMinSize = Prefs.minPopupSize
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             panel.standardWindowButton(button)?.isHidden = true
         }
@@ -152,8 +205,17 @@ final class PopupController {
             rootView: PopupView(
                 model: model,
                 onPick: { [weak self] in self?.onPick($0) },
-                canPreview: { [weak self] in self?.canPreview ?? false }))
+                onCopy: { [weak self] in self?.onCopy($0) },
+                canPreview: { [weak self] in self?.canPreview ?? false },
+                onHover: { [weak self] in self?.followSelection() }))
         lightbox.onDismiss = { [weak self] in self?.lightbox.hide() }
+        NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: panel, queue: .main) {
+            [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                Prefs.popupSize = self.panel.frame.size
+            }
+        }
 
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.close() }
@@ -171,9 +233,16 @@ final class PopupController {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         if let frame = screen?.visibleFrame {
-            let size = panel.frame.size
-            panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.minY + frame.height * 0.62 - size.height / 2))
+            // The saved size, read on every show so Reset in Settings applies, and
+            // never bigger than this screen.
+            let saved = Prefs.popupSize
+            let size = NSSize(
+                width: min(max(saved.width, Prefs.minPopupSize.width), frame.width),
+                height: min(max(saved.height, Prefs.minPopupSize.height), frame.height))
+            let y = min(max(frame.minY + frame.height * 0.62 - size.height / 2, frame.minY), frame.maxY - size.height)
+            panel.setFrame(NSRect(x: frame.midX - size.width / 2, y: y, width: size.width, height: size.height), display: false)
         }
+        panel.pointerAtOpen = NSEvent.mouseLocation
         panel.makeKeyAndOrderFront(nil)
         if keyMonitor == nil {
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
@@ -184,6 +253,7 @@ final class PopupController {
 
     func close() {
         lightbox.hide()
+        panel.clearHover()
         panel.orderOut(nil)
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
@@ -223,6 +293,7 @@ final class PopupController {
             model.commandHeld = command
             return event
         }
+        panel.clearHover()
         switch Int(event.keyCode) {
         case 125: model.move(1); followSelection()  // ↓
         case 126: model.move(-1); followSelection()  // ↑
@@ -333,7 +404,10 @@ private struct LightboxView: View {
 struct PopupView: View {
     @ObservedObject var model: PopupModel
     let onPick: (Clip) -> Void
+    let onCopy: (Clip) -> Void
     let canPreview: () -> Bool
+    /// The pointer moved the selection: the full-size view follows it.
+    var onHover: () -> Void = {}
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -388,26 +462,63 @@ struct PopupView: View {
                                 .padding(.top, index == 0 ? 4 : 12)
                                 .padding(.bottom, 4)
                         }
-                        ClipRow(
+                        HoverRow(
                             clip: clip,
                             number: model.commandHeld && index < 9 ? index + 1 : nil,
                             query: model.query,
-                            selected: index == model.selection
+                            selected: index == model.selection,
+                            copied: model.copiedID == clip.id,
+                            onClick: {
+                                model.selection = index
+                                // The popup stays open, so a second click can still paste.
+                                if Prefs.clickToCopy {
+                                    onCopy(clip)
+                                    model.markCopied(clip)
+                                }
+                            },
+                            onDoubleClick: { onPick(clip) },
+                            onHover: {
+                                model.point(at: index)
+                                onHover()
+                            }
                         )
                         .id(clip.id)
-                        .overlay(
-                            DragSource(
-                                clip: clip,
-                                onClick: { model.selection = index },
-                                onDoubleClick: { onPick(clip) }))
                     }
                 }
                 .padding(8)
             }
             .onChange(of: model.selection) {
-                if let clip = model.selected { proxy.scrollTo(clip.id) }
+                defer { model.selectedByPointer = false }
+                if !model.selectedByPointer, let clip = model.selected { proxy.scrollTo(clip.id) }
             }
         }
+    }
+}
+
+/// A row and its pointer state. The state lives here, not in the model, so
+/// moving the pointer redraws two rows instead of the whole list.
+private struct HoverRow: View {
+    let clip: Clip
+    let number: Int?
+    let query: String
+    let selected: Bool
+    let copied: Bool
+    let onClick: () -> Void
+    let onDoubleClick: () -> Void
+    let onHover: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        ClipRow(clip: clip, number: number, query: query, selected: selected, copied: copied, hovered: hovered)
+            .overlay(
+                DragSource(
+                    clip: clip,
+                    onClick: onClick,
+                    onDoubleClick: onDoubleClick,
+                    onHover: {
+                        hovered = $0
+                        if $0 { onHover() }
+                    }))
     }
 }
 
@@ -416,6 +527,8 @@ private struct ClipRow: View {
     let number: Int?
     let query: String
     let selected: Bool
+    var copied = false
+    var hovered = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -439,7 +552,12 @@ private struct ClipRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            if let number {
+            if copied {
+                Text("Copied")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Brand.river)
+                    .transition(.opacity)
+            } else if let number {
                 Text("⌘\(number)")
                     .font(.system(size: 11.5, weight: .medium, design: .rounded))
                     .foregroundStyle(Brand.river)
@@ -454,10 +572,14 @@ private struct ClipRow: View {
         .padding(.horizontal, 10)
         .frame(height: 32)
         .background {
-            if selected {
-                RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Brand.river.opacity(0.2))
-            }
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Brand.river.opacity(selected ? 0.2 : hovered ? 0.1 : 0))
+                .shadow(color: .black.opacity(hovered ? 0.18 : 0), radius: hovered ? 6 : 0, y: hovered ? 2 : 0)
         }
+        // The hovered row rises a little above the list. Only the pointer animates: ↑↓ stay instant.
+        .scaleEffect(hovered ? 1.012 : 1)
+        .animation(.spring(duration: 0.18, bounce: 0.25), value: hovered)
+        .zIndex(hovered ? 1 : 0)
     }
 }
 
@@ -830,6 +952,7 @@ struct DragSource: NSViewRepresentable {
     let clip: Clip
     let onClick: () -> Void
     let onDoubleClick: () -> Void
+    var onHover: (Bool) -> Void = { _ in }
 
     func makeNSView(context: Context) -> DragView { DragView() }
 
@@ -837,14 +960,43 @@ struct DragSource: NSViewRepresentable {
         view.clip = clip
         view.onClick = onClick
         view.onDoubleClick = onDoubleClick
+        view.onHover = onHover
     }
 
     final class DragView: NSView, NSDraggingSource {
         var clip: Clip?
         var onClick: (() -> Void)?
         var onDoubleClick: (() -> Void)?
+        var onHover: ((Bool) -> Void)?
         private var mouseDown: NSEvent?
         private var dragging = false
+        private var isHovered = false
+
+        // Active always: the popup never activates Holt.
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(
+                NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self))
+        }
+
+        override func mouseEntered(with event: NSEvent) { setHovered(true) }
+        override func mouseExited(with event: NSEvent) { setHovered(false) }
+        // Brings the highlight back after the keyboard cleared it.
+        override func mouseMoved(with event: NSEvent) { setHovered(true) }
+
+        func refreshHover() {
+            guard let window, window.isVisible else { return setHovered(false) }
+            let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            setHovered(bounds.intersection(visibleRect).contains(point))
+        }
+
+        func setHovered(_ hovered: Bool) {
+            if hovered, (window as? PopupPanel)?.pointerHasMoved == false { return }
+            guard hovered != isHovered else { return }
+            isHovered = hovered
+            onHover?(hovered)
+        }
 
         // Otherwise a drag on a row moves the popup, which is movable by its background.
         override var mouseDownCanMoveWindow: Bool { false }
