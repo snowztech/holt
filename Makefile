@@ -85,6 +85,7 @@ test: core
 	cd core && cargo test
 	cd apple && swift test
 	alfred/test.sh
+	node --test scripts/raycast-sql.test.ts
 
 SWIFT_SOURCES := apple/Sources/Holt apple/Tests apple/ios/Sources apple/Package.swift
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { searchSQL } from "./sql.ts";
+import { searchSQL } from "../raycast/src/sql.ts";
 
 test("every word must match, and quotes and wildcards are literal", () => {
   const db = new DatabaseSync(":memory:");
