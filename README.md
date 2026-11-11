@@ -45,17 +45,21 @@
 
 ## Install
 
+Holt needs macOS 14 or later on Apple Silicon.
+
+### Download
+
 [Download Holt](https://github.com/snowztech/holt/releases/latest/download/Holt.dmg), open the disk image and drag Holt to Applications. Or with Homebrew:
 
 ```sh
 brew install --cask snowztech/tap/holt
 ```
 
-It needs macOS 14 or later on Apple Silicon. Releases are signed and notarized, so macOS opens Holt without warnings, and Holt updates itself from the menu bar menu.
+Releases are signed and notarized, so macOS opens Holt without warnings. Holt updates itself from the menu bar menu.
 
-Holt for iPhone is in beta: [join it on TestFlight](https://testflight.apple.com/join/vREWnfrC).
+### Build from source
 
-To build from source instead, you need Xcode and Rust ([rustup.rs](https://rustup.rs)):
+You need Xcode and Rust ([rustup.rs](https://rustup.rs)).
 
 ```sh
 git clone https://github.com/snowztech/holt
@@ -63,11 +67,17 @@ cd holt
 make run
 ```
 
-On first launch, a short checklist walks you through setup:
+`make run` builds the Rust core and the Mac app, quits any running Holt, and opens `build/Holt.app`. Without an Apple Development certificate the app is ad-hoc signed, so macOS may ask for Accessibility again after each rebuild.
+
+### First launch
+
+A short checklist walks you through setup:
 
 - **See what you copy.** Required. Set Holt to Always Allow in System Settings → Privacy & Security → Paste from Other Apps. Without it, macOS asks on every copy.
 - **Paste for you.** Optional. Accessibility access lets Holt paste into the app you're in. Without it, Holt copies the clip and you press ⌘V.
 - **Open at login.** Recommended, so Holt never misses a copy after a restart.
+
+Holt for iPhone is in beta: [join it on TestFlight](https://testflight.apple.com/join/vREWnfrC).
 
 ## Docs
 
