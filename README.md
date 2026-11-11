@@ -45,8 +45,6 @@
 
 ## Install
 
-Holt needs macOS 14 or later on Apple Silicon.
-
 ### Download
 
 [Download Holt](https://github.com/snowztech/holt/releases/latest/download/Holt.dmg), open the disk image and drag Holt to Applications. Or with Homebrew:
